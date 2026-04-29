@@ -1815,8 +1815,12 @@ function handleMouseLeave(e) {
 
 // Send paddle position to server as a normalized 0-1 fraction of canvas width
 // This makes it device-independent — server maps to virtual world coords
+let _lastPaddleSendTime = 0;
 function sendPaddlePosition(x) {
     if (Game.isAIGame) return;
+    const now = performance.now();
+    if (now - _lastPaddleSendTime < 16) return; // cap at ~60fps to avoid flooding
+    _lastPaddleSendTime = now;
     const myWidth = (Game.isPlayer1 ? Game.paddle1 : Game.paddle2).width;
     const fraction = Math.max(0, Math.min(1, x / (Game.canvas.width - myWidth)));
     sendToServer({ type: 'paddleMove', gameId: Game.gameId, xFraction: fraction });
@@ -2022,6 +2026,19 @@ function gameLoop() {
         if (Game.isAIGame) updateAIPaddle();
         updateBallPhysics(); // runs for BOTH AI and multiplayer (guarded by roundActive)
         updateParticles();
+
+        // Multiplayer: extrapolate ball between server frames + lerp opponent paddle
+        if (!Game.isAIGame && Game.roundActive) {
+            if (Game.ball._svT !== undefined) {
+                const dt = (performance.now() - Game.ball._svT) * 60 / 1000; // frames elapsed
+                Game.ball.x = Game.ball._svX + Game.ball.speedX * Game.ball._ramp * dt;
+                Game.ball.y = Game.ball._svY + Game.ball.speedY * Game.ball._ramp * dt;
+            }
+            const opp = Game.isPlayer1 ? Game.paddle2 : Game.paddle1;
+            if (opp._targetX !== undefined) {
+                opp.x += (opp._targetX - opp.x) * 0.3;
+            }
+        }
     } catch (e) {
         console.error('[LOOP] physics error:', e);
     }
@@ -3044,37 +3061,45 @@ function onGameOver(data) {
 }
 
 // Apply server-authoritative game state to local render state
-// Called ~60fps from 'gameState' WebSocket messages during multiplayer
+// Ball is stored as an extrapolation origin; opponent paddle is lerped each frame
 function applyServerGameState(data) {
     if (!Game.isActive || Game.isAIGame) return;
 
     const sx = Game.canvas.width  / SERVER_WORLD_W;
     const sy = Game.canvas.height / SERVER_WORLD_H;
 
-    // Ball: scale from server virtual world to canvas pixels
     if (data.ball) {
-        Game.ball.x      = data.ball.x * sx;
-        Game.ball.y      = data.ball.y * sy;
-        Game.ball.speedX = data.ball.speedX * sx;
-        Game.ball.speedY = data.ball.speedY * sy;
-        // Update trail for rendering
+        const svX = data.ball.x * sx;
+        const svY = data.ball.y * sy;
+        // Snap if too far off (reconnect / large correction)
+        const dx = svX - Game.ball.x, dy = svY - Game.ball.y;
+        if (dx * dx + dy * dy > 50 * 50) {
+            Game.ball.x = svX;
+            Game.ball.y = svY;
+        }
+        // Store as extrapolation origin
+        Game.ball._svX    = svX;
+        Game.ball._svY    = svY;
+        Game.ball._svT    = performance.now();
+        Game.ball._ramp   = data.ramp !== undefined ? data.ramp : 1.0;
+        Game.ball.speedX  = data.ball.speedX * sx;
+        Game.ball.speedY  = data.ball.speedY * sy;
         Game.ball.trail.push({ x: Game.ball.x, y: Game.ball.y });
         if (Game.ball.trail.length > 8) Game.ball.trail.shift();
     }
 
-    // Paddles: scale server x to canvas x
-    // Own paddle: updated locally by input for zero-latency feel
-    // Opponent paddle: always from server
+    // Own paddle: updated locally for zero-latency feel
+    // Opponent paddle: store target, lerp each frame
     if (Game.isPlayer1) {
         if (data.paddle2X !== undefined) {
-            Game.paddle2.x = data.paddle2X * sx;
-            Game.paddle2.width = SERVER_PADDLE_W * sx;
+            Game.paddle2._targetX = data.paddle2X * sx;
+            Game.paddle2.width    = SERVER_PADDLE_W * sx;
         }
         Game.paddle1.width = SERVER_PADDLE_W * sx;
     } else {
         if (data.paddle1X !== undefined) {
-            Game.paddle1.x = data.paddle1X * sx;
-            Game.paddle1.width = SERVER_PADDLE_W * sx;
+            Game.paddle1._targetX = data.paddle1X * sx;
+            Game.paddle1.width    = SERVER_PADDLE_W * sx;
         }
         Game.paddle2.width = SERVER_PADDLE_W * sx;
     }

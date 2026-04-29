@@ -95,15 +95,24 @@ function initBallForRound(game) {
 }
 
 // Start/stop the server-side physics loop
+// Uses drift-corrected setTimeout so the event loop can't bunch up missed ticks
 function startPhysicsLoop(game) {
-    if (game.physicsInterval) return;
+    if (game.physicsTimeout) return;
     console.log(`[PHYSICS] Starting loop for game ${game.id}`);
-    game.physicsInterval = setInterval(() => serverTick(game), TICK_MS);
+    let expected = Date.now() + TICK_MS;
+    function tick() {
+        serverTick(game);
+        if (!game.physicsTimeout) return;
+        const drift = Date.now() - expected;
+        expected += TICK_MS;
+        game.physicsTimeout = setTimeout(tick, Math.max(0, TICK_MS - drift));
+    }
+    game.physicsTimeout = setTimeout(tick, TICK_MS);
 }
 function stopPhysicsLoop(game) {
-    if (game.physicsInterval) {
-        clearInterval(game.physicsInterval);
-        game.physicsInterval = null;
+    if (game.physicsTimeout) {
+        clearTimeout(game.physicsTimeout);
+        game.physicsTimeout = null;
         console.log(`[PHYSICS] Stopped loop for game ${game.id}`);
     }
 }
