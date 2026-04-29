@@ -78,14 +78,6 @@ function verifyTelegramInitData(initData) {
     }
 }
 
-// ELO tiers — minimum ELO required per bet amount
-const BET_TIER_ELO = { 5: 0, 10: 0, 20: 200, 40: 300, 100: 400 };
-
-// Flat random ELO change: win +28–37, loss −7–11
-function calculateEloChange(isWin) {
-    if (isWin) return Math.floor(Math.random() * 10) + 28; // 28–37
-    return -(Math.floor(Math.random() * 5) + 7);           // −7–11
-}
 
 // ── Server-Authoritative Physics World ───────────────────────────────────────
 const WORLD_W    = 400;
@@ -910,13 +902,6 @@ function handleCreateGame(socketId, ws, data) {
         return;
     }
 
-    // ELO tier check
-    const eloReqCreate = BET_TIER_ELO[betAmount] || 0;
-    if ((user.elo || ELO_START) < eloReqCreate) {
-        safeSend(ws, { type: 'error', message: `You need ${eloReqCreate} ELO to create a $${betAmount} room. Your ELO: ${user.elo || ELO_START}.` });
-        return;
-    }
-
     // Deduct bet from balance
     user.balance -= betAmount;
     user.totalWagered = (user.totalWagered || 0) + betAmount;
@@ -1007,12 +992,6 @@ function handleJoinGame(socketId, ws, data) {
         return;
     }
 
-    // ELO tier check
-    const eloReqJoin = BET_TIER_ELO[game.betAmount] || 0;
-    if ((user.elo || ELO_START) < eloReqJoin) {
-        ws.send(JSON.stringify({ type: 'joinFailed', reason: `Need ${eloReqJoin} ELO to join a $${game.betAmount} room. Your ELO: ${user.elo || ELO_START}.` }));
-        return;
-    }
 
     // New-account stake limit
     if ((user.matchesPlayed || 0) < NEW_ACCOUNT_MATCHES && game.betAmount > NEW_ACCOUNT_MAX_BET) {
@@ -1724,19 +1703,9 @@ function endMultiplayerMatch(game, winnerId, reason) {
             loser.matchesPlayed = (loser.matchesPlayed || 0) + 1;
         }
 
-        // ELO update
-        if (winner && loser) {
-            const winChange     = calculateEloChange(true);
-            const lossChange    = calculateEloChange(false);
-            const prevWinnerElo = winner.elo || ELO_START;
-            const prevLoserElo  = loser.elo  || ELO_START;
-            winner.elo = Math.max(1, prevWinnerElo + winChange);
-            loser.elo  = Math.max(1, prevLoserElo  + lossChange);
-            const winnerIsP1 = winnerId === game.player1Id;
-            p1EloChange = winnerIsP1 ? winChange : lossChange;
-            p2EloChange = winnerIsP1 ? lossChange : winChange;
-            console.log(`[ELO] ${winner.name}: ${prevWinnerElo} → ${winner.elo} | ${loser.name}: ${prevLoserElo} → ${loser.elo}`);
-        }
+        // ELO frozen — no changes
+        p1EloChange = 0;
+        p2EloChange = 0;
 
         // Referral bonus: 5% of platform fee on referred user's first match
         [game.player1Id, game.player2Id].forEach(pid => {

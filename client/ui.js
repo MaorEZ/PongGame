@@ -2025,30 +2025,8 @@ window.clearGraceCountdown = function() {
     if (el) el.remove();
 };
 
-// ── ELO Bet Tier Locking ──────────────────────────────────────────────────────
-const BET_TIER_ELO = { 5: 0, 10: 0, 20: 200, 40: 300, 100: 400 };
-
-function updateBetTierLocks() {
-    const elo = AppState.user.elo || 100;
-    ['.budget-btn', '.create-room-amount-btn', '.bet-btn'].forEach(sel => {
-        document.querySelectorAll(sel).forEach(btn => {
-            const amount = parseInt(btn.dataset.budget || btn.dataset.amount || '0');
-            const req = BET_TIER_ELO[amount] || 0;
-            if (req > elo) {
-                btn.disabled = true;
-                btn.classList.remove('selected');
-                btn.style.opacity = '0.35';
-                btn.style.cursor = 'not-allowed';
-                btn.innerHTML = `$${amount}<br><small style="font-size:10px;opacity:0.8;">🔒 ${req} ELO</small>`;
-            } else {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                btn.style.cursor = '';
-                btn.textContent = `$${amount}`;
-            }
-        });
-    });
-}
+// ELO gating removed — all bet amounts open to everyone
+function updateBetTierLocks() {}
 window.updateBetTierLocks = updateBetTierLocks;
 
 // ── Floating Chat Widget ──────────────────────────────────────────────────────
