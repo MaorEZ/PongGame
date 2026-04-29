@@ -55,7 +55,6 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 
 // ── ELO & Stake Gate Config ───────────────────────────────────────────────────
 const ELO_START          = 100;  // starting rating for all new players
-const ELO_K              = 32;   // standard K-factor
 const NEW_ACCOUNT_MATCHES = 10;  // matches before stake limit lifts
 const NEW_ACCOUNT_MAX_BET = 5;   // max bet (USDT) during new-account period
 
@@ -79,13 +78,13 @@ function verifyTelegramInitData(initData) {
     }
 }
 
-// Standard ELO calculation — returns new ratings for winner and loser
-function calculateElo(winnerElo, loserElo) {
-    const expected = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
-    return {
-        winnerNew: Math.round(winnerElo + ELO_K * (1 - expected)),
-        loserNew:  Math.round(loserElo  + ELO_K * (0 - (1 - expected)))
-    };
+// ELO tiers — minimum ELO required per bet amount
+const BET_TIER_ELO = { 5: 0, 10: 0, 20: 200, 40: 300, 100: 400 };
+
+// Flat random ELO change: win +28–37, loss −7–11
+function calculateEloChange(isWin) {
+    if (isWin) return Math.floor(Math.random() * 10) + 28; // 28–37
+    return -(Math.floor(Math.random() * 5) + 7);           // −7–11
 }
 
 // ── Server-Authoritative Physics World ───────────────────────────────────────
@@ -911,6 +910,13 @@ function handleCreateGame(socketId, ws, data) {
         return;
     }
 
+    // ELO tier check
+    const eloReqCreate = BET_TIER_ELO[betAmount] || 0;
+    if ((user.elo || ELO_START) < eloReqCreate) {
+        safeSend(ws, { type: 'error', message: `You need ${eloReqCreate} ELO to create a $${betAmount} room. Your ELO: ${user.elo || ELO_START}.` });
+        return;
+    }
+
     // Deduct bet from balance
     user.balance -= betAmount;
     user.totalWagered = (user.totalWagered || 0) + betAmount;
@@ -998,6 +1004,13 @@ function handleJoinGame(socketId, ws, data) {
     if (!user || user.balance < game.betAmount) {
         console.log(`[JOIN] FAIL — insufficient balance`);
         ws.send(JSON.stringify({ type: 'joinFailed', reason: 'Insufficient balance' }));
+        return;
+    }
+
+    // ELO tier check
+    const eloReqJoin = BET_TIER_ELO[game.betAmount] || 0;
+    if ((user.elo || ELO_START) < eloReqJoin) {
+        ws.send(JSON.stringify({ type: 'joinFailed', reason: `Need ${eloReqJoin} ELO to join a $${game.betAmount} room. Your ELO: ${user.elo || ELO_START}.` }));
         return;
     }
 
@@ -1713,14 +1726,15 @@ function endMultiplayerMatch(game, winnerId, reason) {
 
         // ELO update
         if (winner && loser) {
+            const winChange     = calculateEloChange(true);
+            const lossChange    = calculateEloChange(false);
             const prevWinnerElo = winner.elo || ELO_START;
             const prevLoserElo  = loser.elo  || ELO_START;
-            const eloResult = calculateElo(prevWinnerElo, prevLoserElo);
-            winner.elo = eloResult.winnerNew;
-            loser.elo  = eloResult.loserNew;
+            winner.elo = Math.max(1, prevWinnerElo + winChange);
+            loser.elo  = Math.max(1, prevLoserElo  + lossChange);
             const winnerIsP1 = winnerId === game.player1Id;
-            p1EloChange = winnerIsP1 ? (eloResult.winnerNew - prevWinnerElo) : (eloResult.loserNew - prevLoserElo);
-            p2EloChange = winnerIsP1 ? (eloResult.loserNew  - prevLoserElo)  : (eloResult.winnerNew - prevWinnerElo);
+            p1EloChange = winnerIsP1 ? winChange : lossChange;
+            p2EloChange = winnerIsP1 ? lossChange : winChange;
             console.log(`[ELO] ${winner.name}: ${prevWinnerElo} → ${winner.elo} | ${loser.name}: ${prevLoserElo} → ${loser.elo}`);
         }
 

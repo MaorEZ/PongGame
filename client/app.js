@@ -414,7 +414,10 @@ function handleServerMessage(data) {
 
         case 'gameOver':
             // Server-authoritative game end — update ELO before forwarding to game.js
-            if (data.newElo !== undefined) AppState.user.elo = data.newElo;
+            if (data.newElo !== undefined) {
+                AppState.user.elo = data.newElo;
+                if (typeof updateBetTierLocks === 'function') updateBetTierLocks();
+            }
             if (data.matchesPlayed !== undefined) AppState.user.matchesPlayed = data.matchesPlayed;
             if (data.fairReveal) verifyProvablyFair(data.fairReveal);
             try {
@@ -485,8 +488,9 @@ function handleServerMessage(data) {
             break;
 
         case 'playerStats':
-            AppState.user.elo = data.elo || 1000;
+            AppState.user.elo = data.elo || 100;
             AppState.user.matchesPlayed = data.matchesPlayed || 0;
+            if (typeof updateBetTierLocks === 'function') updateBetTierLocks();
             break;
 
         case 'matchHistory':
