@@ -143,15 +143,20 @@ function serverTick(game) {
         ball.speedX = xs * Math.sqrt(Math.max(0, spd * spd - ball.speedY * ball.speedY));
     }
 
+    // Lag-compensated paddle positions — use where the player had their paddle
+    // at (now - RTT/2), i.e. the last input they could have sent given their ping
+    const p1lag = getLagPaddleX(game.paddle1History, game.paddle1.x, (game.player1RTT || 0) / 2);
+    const p2lag = getLagPaddleX(game.paddle2History, game.paddle2.x, (game.player2RTT || 0) / 2);
+
     // Paddle 1 collision (bottom paddle)
     const pBot = prevY + BALL_R, cBot = ball.y + BALL_R;
     const crossP1 = pBot <= P1_Y && cBot >= P1_Y;
     let p1cx = ball.x;
     if (crossP1 && cBot !== pBot) p1cx = prevX + effX * ((P1_Y - pBot) / (cBot - pBot));
     if ((crossP1 || (cBot > P1_Y && cBot < P1_Y + PADDLE_H)) &&
-        p1cx > game.paddle1.x - BALL_R && p1cx < game.paddle1.x + PADDLE_W + BALL_R && ball.speedY > 0) {
+        p1cx > p1lag - BALL_R && p1cx < p1lag + PADDLE_W + BALL_R && ball.speedY > 0) {
         ball.y = P1_Y - BALL_R;
-        const angle = ((p1cx - game.paddle1.x) / PADDLE_W - 0.5) * (Math.PI / 3);
+        const angle = ((p1cx - p1lag) / PADDLE_W - 0.5) * (Math.PI / 3);
         const ns = spd + BASE_SPEED * 0.08;
         ball.speedX = Math.sin(angle) * ns;
         ball.speedY = -Math.abs(Math.cos(angle) * ns);
@@ -165,9 +170,9 @@ function serverTick(game) {
     let p2cx = ball.x;
     if (crossP2 && cTop !== pTop) p2cx = prevX + effX * ((p2Bot - pTop) / (cTop - pTop));
     if ((crossP2 || (cTop < p2Bot && cTop > P2_Y)) &&
-        p2cx > game.paddle2.x - BALL_R && p2cx < game.paddle2.x + PADDLE_W + BALL_R && ball.speedY < 0) {
+        p2cx > p2lag - BALL_R && p2cx < p2lag + PADDLE_W + BALL_R && ball.speedY < 0) {
         ball.y = p2Bot + BALL_R;
-        const angle = ((p2cx - game.paddle2.x) / PADDLE_W - 0.5) * (Math.PI / 3);
+        const angle = ((p2cx - p2lag) / PADDLE_W - 0.5) * (Math.PI / 3);
         const ns = spd + BASE_SPEED * 0.08;
         ball.speedX = Math.sin(angle) * ns;
         ball.speedY = Math.abs(Math.cos(angle) * ns);
@@ -266,6 +271,7 @@ function startNewRound(game) {
         serverTime: Date.now()
     });
     startPhysicsLoop(game);
+    startPingLoop(game);
     console.log(`[ROUND] Round ${game.currentRound} started`);
 }
 
@@ -415,6 +421,10 @@ function handleClientMessage(socketId, ws, data) {
 
         case 'paddleMove':
             handlePaddleMove(socketId, ws, data);
+            break;
+
+        case 'pong':
+            handlePong(socketId, data);
             break;
 
         case 'cancelGame':
@@ -1162,9 +1172,56 @@ function handlePaddleMove(socketId, ws, data) {
     // Client sends xFraction (0-1); server maps to virtual world x-coordinate
     const xFraction = Math.max(0, Math.min(1, data.xFraction !== undefined ? data.xFraction : (data.x || 0) / WORLD_W));
     const vx = xFraction * (WORLD_W - PADDLE_W);
-    if (userId === game.player1Id && game.paddle1) game.paddle1.x = vx;
-    else if (userId === game.player2Id && game.paddle2) game.paddle2.x = vx;
+    if (userId === game.player1Id && game.paddle1) {
+        game.paddle1.x = vx;
+        if (!game.paddle1History) game.paddle1History = [];
+        game.paddle1History.push({ x: vx, t: currentTime });
+        if (game.paddle1History.length > 20) game.paddle1History.shift();
+    } else if (userId === game.player2Id && game.paddle2) {
+        game.paddle2.x = vx;
+        if (!game.paddle2History) game.paddle2History = [];
+        game.paddle2History.push({ x: vx, t: currentTime });
+        if (game.paddle2History.length > 20) game.paddle2History.shift();
+    }
     // No per-paddle broadcast — serverTick broadcasts all positions every 16ms
+}
+
+// Return the paddle x closest to (now - lagMs) from history, fallback to current
+function getLagPaddleX(history, currentX, lagMs) {
+    if (!history || history.length === 0) return currentX;
+    const target = Date.now() - lagMs;
+    let best = history[0];
+    for (const h of history) {
+        if (Math.abs(h.t - target) < Math.abs(best.t - target)) best = h;
+    }
+    return best.x;
+}
+
+// Handle pong reply — compute RTT and store on game
+function handlePong(socketId, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    if (!socketInfo) return;
+    const userId = socketInfo.userId;
+    const rtt = Math.min(Date.now() - data.t, 500);
+    Database.games.forEach(game => {
+        if (game.player1Id === userId) game.player1RTT = rtt;
+        if (game.player2Id === userId) game.player2RTT = rtt;
+    });
+}
+
+// Start periodic RTT measurement for a game
+function startPingLoop(game) {
+    if (game.pingInterval) return;
+    game.pingInterval = setInterval(() => {
+        const now = Date.now();
+        const p1 = getSocketByUserId(game.player1Id);
+        const p2 = getSocketByUserId(game.player2Id);
+        safeSend(p1, { type: 'ping', t: now });
+        safeSend(p2, { type: 'ping', t: now });
+    }, 2000);
+}
+function stopPingLoop(game) {
+    if (game.pingInterval) { clearInterval(game.pingInterval); game.pingInterval = null; }
 }
 
 // Flag suspicious activity
@@ -1433,6 +1490,7 @@ function handleScoreReport(socketId, ws, data) {
 // End multiplayer match authoritatively
 function endMultiplayerMatch(game, winnerId, reason) {
     stopPhysicsLoop(game);
+    stopPingLoop(game);
     if (game.roundReadyTimeout) { clearTimeout(game.roundReadyTimeout); game.roundReadyTimeout = null; }
     if (game.roundCooldownTimer) { clearTimeout(game.roundCooldownTimer); game.roundCooldownTimer = null; }
     game.status = 'finished';

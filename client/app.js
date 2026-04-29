@@ -161,6 +161,10 @@ function handleServerMessage(data) {
             }
             break;
 
+        case 'ping':
+            sendToServer({ type: 'pong', t: data.t });
+            break;
+
         case 'balance':
             updateBalance(data.balance);
             break;
