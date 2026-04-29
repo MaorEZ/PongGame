@@ -15,6 +15,7 @@ let selectedBetAmount = 0;
 let selectedGameMode = 'classic'; // 'classic' or 'chaotic'
 let selectedBudget = 0; // Budget filter for room browser
 let currentMatchId = null;
+let roomPollingInterval = null;
 let rematchTimer = null;
 let waitingRoomTimer = null;
 
@@ -151,8 +152,9 @@ document.querySelectorAll('.budget-btn').forEach(btn => {
             if (budgetBadge) budgetBadge.textContent = '$' + selectedBudget;
         } catch (e) { console.error('Badge update failed:', e); }
 
-        // Request rooms from server (can't block navigation)
+        // Request rooms from server and start polling
         try { requestRoomList(); } catch (e) { console.error('Room list request failed:', e); }
+        startRoomPolling();
     });
 });
 
@@ -169,6 +171,7 @@ document.getElementById('backFromBudget').addEventListener('click', () => {
 
 document.getElementById('backFromRoomBrowser').addEventListener('click', () => {
     hapticFeedback('light');
+    stopRoomPolling();
     showScreen('budgetScreen');
 });
 
@@ -270,6 +273,20 @@ function requestRoomList() {
         gameMode: selectedGameMode,
         maxBudget: selectedBudget
     });
+}
+
+function startRoomPolling() {
+    stopRoomPolling();
+    roomPollingInterval = setInterval(() => {
+        try { requestRoomList(); } catch (e) {}
+    }, 3000);
+}
+
+function stopRoomPolling() {
+    if (roomPollingInterval) {
+        clearInterval(roomPollingInterval);
+        roomPollingInterval = null;
+    }
 }
 
 // Get initials from player name for avatar
