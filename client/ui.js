@@ -108,9 +108,9 @@ onTap(document.getElementById('playSquare'), () => {
     startRoomPolling();
 });
 
-document.getElementById('practiceSquare').addEventListener('click', () => {
+onTap(document.getElementById('practiceSquare'), () => {
     hapticFeedback('light');
-    document.getElementById('aiModeModal').classList.add('active');
+    showScreen('practiceScreen');
 });
 
 document.getElementById('comingSoon1').addEventListener('click', () => {
@@ -133,7 +133,7 @@ document.getElementById('depositBtn').addEventListener('click', () => {
 document.getElementById('playAIBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
-    startAIGame();
+    showScreen('practiceScreen');
 });
 
 // === Inline Room Browser controls (mode toggle + stake row) ===
@@ -849,10 +849,33 @@ document.querySelectorAll('.ai-mode-btn').forEach(btn => {
     });
 });
 
-// Cancel AI mode selection
+// Cancel AI mode selection (modal kept for legacy, bypassed in new flow)
 document.getElementById('cancelAIModeBtn').addEventListener('click', () => {
     hapticFeedback('light');
     document.getElementById('aiModeModal').classList.remove('active');
+});
+
+// === Practice Screen ===
+let selectedPracticeMode = 'classic';
+
+document.querySelectorAll('.practice-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        hapticFeedback('light');
+        document.querySelectorAll('.practice-mode-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedPracticeMode = btn.dataset.practiceMode;
+    });
+});
+
+document.getElementById('backFromPractice').addEventListener('click', () => {
+    hapticFeedback('light');
+    showScreen('mainMenu');
+});
+
+document.getElementById('startPracticeBtn').addEventListener('click', () => {
+    hapticFeedback('medium');
+    selectedGameMode = selectedPracticeMode;
+    startAIGame();
 });
 
 // Preset Bet Amount Selection
