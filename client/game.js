@@ -1589,6 +1589,28 @@ function endMultiplayerGame() {
     const reportBtn = document.getElementById('reportMatchBtn');
     if (reportBtn) reportBtn.style.display = 'block';
 
+    // Show emoji section and reset state
+    const emojiSection = document.getElementById('emojiSection');
+    if (emojiSection) {
+        emojiSection.style.display = 'block';
+        document.querySelectorAll('.emoji-btn').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+        const recv = document.getElementById('emojiReceived');
+        if (recv) recv.style.display = 'none';
+    }
+
+    // Make opponent name tappable on result title area
+    const opponentName = Game.isPlayer1
+        ? (AppState.currentGame && AppState.currentGame.player2Name)
+        : (AppState.currentGame && AppState.currentGame.player1Name);
+    if (opponentName) {
+        resultTitle.style.cursor = 'default';
+        const opEl = document.getElementById('resultOpponent');
+        if (opEl) {
+            opEl.style.display = 'block';
+            opEl.innerHTML = `vs <span style="color:#4fd1c5;cursor:pointer;text-decoration:underline;" onclick="openProfile('${opponentName}')">${opponentName}</span>`;
+        }
+    }
+
     setTimeout(() => { showScreen('resultScreen'); }, 1000);
 }
 

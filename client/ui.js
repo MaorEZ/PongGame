@@ -694,6 +694,23 @@ document.getElementById('backToMenuBtn').addEventListener('click', () => {
     requestBalance();
 });
 
+document.getElementById('backFromProfile').addEventListener('click', () => {
+    hapticFeedback('light');
+    history.back(); // go back to wherever profile was opened from
+    // fallback
+    setTimeout(() => { if (document.getElementById('profileScreen').classList.contains('active')) showScreen('mainMenu'); }, 100);
+});
+
+// Post-match emoji buttons
+document.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        hapticFeedback('light');
+        sendToServer({ type: 'matchEmoji', emoji: btn.dataset.emoji });
+        btn.style.opacity = '0.4';
+        btn.disabled = true;
+    });
+});
+
 document.getElementById('changeNameBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
@@ -1734,9 +1751,12 @@ function renderLeaderboard(data) {
         else if (activeLeaderboardTab === 'elo') stat = `${player.elo} ELO`;
         else stat = `+$${(player.earnings || 0).toFixed(2)}`;
 
+        const nameHtml = isMe
+            ? `${escapeHtml(player.name)} (You)`
+            : `<span style="cursor:pointer;color:#4fd1c5;text-decoration:underline;" onclick="openProfile('${escapeHtml(player.name)}')">${escapeHtml(player.name)}</span>`;
         item.innerHTML = `
             <div class="rank">${escapeHtml(medal)}</div>
-            <div class="player-name">${escapeHtml(player.name)}${isMe ? ' (You)' : ''}</div>
+            <div class="player-name">${nameHtml}</div>
             <div class="player-stats"><div>${escapeHtml(stat)}</div></div>
         `;
         list.appendChild(item);

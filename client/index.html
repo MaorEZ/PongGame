@@ -563,6 +563,7 @@
         <div class="container">
             <div class="result-content">
                 <h2 id="resultTitle">You Won!</h2>
+                <p id="resultOpponent" style="display:none; font-size:13px; color:#888; margin-top:4px;"></p>
                 <div class="result-amount">
                     <span class="amount-won" id="amountWon">+19.00</span>
                     <span class="currency">USDT</span>
@@ -576,6 +577,17 @@
                     <p class="elo-change-row" id="eloChangeRow" style="display:none;">
                         ELO: <span id="eloChangeText"></span> → <span id="eloNewText"></span>
                     </p>
+                </div>
+
+                <!-- Post-match emoji reactions -->
+                <div id="emojiSection" style="display:none; margin:16px 0;">
+                    <p style="font-size:12px; color:#888; margin-bottom:8px;">Send a reaction</p>
+                    <div style="display:flex; gap:12px; justify-content:center;">
+                        <button class="emoji-btn" data-emoji="GG" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">GG</button>
+                        <button class="emoji-btn" data-emoji="😤" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">😤</button>
+                        <button class="emoji-btn" data-emoji="🔥" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">🔥</button>
+                    </div>
+                    <div id="emojiReceived" style="display:none; font-size:40px; margin-top:12px; animation: fadeIn 0.3s ease;"></div>
                 </div>
 
                 <div class="rematch-section" id="rematchSection">
@@ -802,6 +814,36 @@
                     <!-- Populated by JavaScript -->
                     <div class="no-data">No leaderboard data yet</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Profile Screen -->
+    <div id="profileScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromProfile">← Back</button>
+            <div id="profileContent" style="text-align:center; padding-top:12px;">
+                <div style="font-size:48px; margin-bottom:8px;" id="profileAvatar">?</div>
+                <h2 id="profileName" style="font-size:22px; margin-bottom:4px;">---</h2>
+                <div id="profileElo" style="color:#4fd1c5; font-size:14px; margin-bottom:16px;">--- ELO</div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:20px;">
+                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:12px;">
+                        <div id="profileWins" style="font-size:22px; font-weight:700; color:#22c55e;">0</div>
+                        <div style="font-size:11px; color:#888;">Wins</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:12px;">
+                        <div id="profileWinRate" style="font-size:22px; font-weight:700; color:#4fd1c5;">0%</div>
+                        <div style="font-size:11px; color:#888;">Win Rate</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:12px;">
+                        <div id="profileEarnings" style="font-size:22px; font-weight:700; color:#f59e0b;">$0</div>
+                        <div style="font-size:11px; color:#888;">Earned</div>
+                    </div>
+                </div>
+
+                <h3 style="font-size:14px; color:#888; text-align:left; margin-bottom:8px;">Recent Matches</h3>
+                <div id="profileMatches" style="text-align:left;"></div>
             </div>
         </div>
     </div>

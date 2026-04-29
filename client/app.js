@@ -168,6 +168,14 @@ function handleServerMessage(data) {
             sendToServer({ type: 'pong', t: data.t });
             break;
 
+        case 'profileData':
+            showProfileScreen(data);
+            break;
+
+        case 'matchEmoji':
+            showReceivedEmoji(data.emoji);
+            break;
+
         case 'balance':
             updateBalance(data.balance);
             break;
@@ -461,6 +469,51 @@ function handleServerMessage(data) {
         default:
             console.log('Unknown message type:', data.type);
     }
+}
+
+// Open a player's profile by name (called from leaderboard/room browser/result screen)
+window.openProfile = function(username) {
+    sendToServer({ type: 'getProfile', username });
+    showScreen('profileScreen');
+    document.getElementById('profileName').textContent = username;
+    document.getElementById('profileAvatar').textContent = username ? username[0].toUpperCase() : '?';
+    document.getElementById('profileMatches').innerHTML = '<p style="color:#666;font-size:13px;">Loading...</p>';
+};
+
+function showProfileScreen(data) {
+    if (data.error) {
+        document.getElementById('profileMatches').innerHTML = `<p style="color:#ef4444;">${data.error}</p>`;
+        return;
+    }
+    document.getElementById('profileName').textContent = data.name;
+    document.getElementById('profileAvatar').textContent = data.name ? data.name[0].toUpperCase() : '?';
+    document.getElementById('profileElo').textContent = `${data.elo} ELO`;
+    document.getElementById('profileWins').textContent = data.wins;
+    document.getElementById('profileWinRate').textContent = `${data.winRate}%`;
+    document.getElementById('profileEarnings').textContent = `$${(data.earnings || 0).toFixed(2)}`;
+
+    const matchesEl = document.getElementById('profileMatches');
+    if (!data.recentMatches || data.recentMatches.length === 0) {
+        matchesEl.innerHTML = '<p style="color:#666;font-size:13px;">No matches yet</p>';
+        return;
+    }
+    matchesEl.innerHTML = data.recentMatches.map(m => {
+        const color = m.result === 'win' ? '#22c55e' : m.result === 'loss' ? '#ef4444' : '#94a3b8';
+        const sign = m.netChange >= 0 ? '+' : '';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span style="color:${color};font-weight:600;text-transform:uppercase;font-size:12px;">${m.result}</span>
+            <span style="color:#ccc;font-size:13px;">vs ${m.opponentName || '?'}</span>
+            <span style="color:${color};font-size:13px;">${sign}$${Math.abs(m.netChange || 0).toFixed(2)}</span>
+        </div>`;
+    }).join('');
+}
+
+function showReceivedEmoji(emoji) {
+    const el = document.getElementById('emojiReceived');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = emoji;
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
 // Provably fair: verify server commitment after match

@@ -469,6 +469,14 @@ function handleClientMessage(socketId, ws, data) {
             handlePong(socketId, data);
             break;
 
+        case 'getProfile':
+            handleGetProfile(socketId, ws, data);
+            break;
+
+        case 'matchEmoji':
+            handleMatchEmoji(socketId, ws, data);
+            break;
+
         case 'cancelGame':
             handleCancelGame(socketId, ws, data);
             break;
@@ -706,6 +714,77 @@ function handleGetMatchHistory(socketId, ws, data) {
     const user = Database.users.get(userId);
     if (!user) return;
     safeSend(ws, { type: 'matchHistory', history: user.matchHistory || [] });
+}
+
+// Return public profile for any player by name or userId
+async function handleGetProfile(socketId, ws, data) {
+    const targetId = data.userId;
+    const targetName = data.username;
+
+    // Try in-memory first
+    let user = targetId ? Database.users.get(targetId) : null;
+    if (!user && targetName) {
+        Database.users.forEach(u => { if (u.name === targetName) user = u; });
+    }
+
+    if (user) {
+        const total = (user.wins || 0) + (user.losses || 0);
+        safeSend(ws, {
+            type: 'profileData',
+            name: user.name,
+            elo: user.elo || ELO_START,
+            wins: user.wins || 0,
+            losses: user.losses || 0,
+            winRate: total > 0 ? Math.round((user.wins / total) * 100) : 0,
+            earnings: user.earnings || 0,
+            matchesPlayed: user.matchesPlayed || 0,
+            recentMatches: (user.matchHistory || []).slice(0, 5)
+        });
+        return;
+    }
+
+    // Fall back to Supabase for offline players
+    try {
+        const query = targetId
+            ? db.from('game_stats').select('*').eq('user_id', String(targetId)).single()
+            : db.from('game_stats').select('*').eq('username', targetName).single();
+        const { data: saved } = await query;
+        if (saved) {
+            const total = (saved.wins || 0) + (saved.losses || 0);
+            safeSend(ws, {
+                type: 'profileData',
+                name: saved.username,
+                elo: saved.elo || ELO_START,
+                wins: saved.wins || 0,
+                losses: saved.losses || 0,
+                winRate: total > 0 ? Math.round((saved.wins / total) * 100) : 0,
+                earnings: saved.earnings || 0,
+                matchesPlayed: saved.matches_played || 0,
+                recentMatches: []
+            });
+        } else {
+            safeSend(ws, { type: 'profileData', error: 'Player not found' });
+        }
+    } catch (e) {
+        safeSend(ws, { type: 'profileData', error: 'Player not found' });
+    }
+}
+
+// Forward a post-match emoji to the opponent (GG / 😤 / 🔥)
+function handleMatchEmoji(socketId, ws, data) {
+    const ALLOWED = ['GG', '😤', '🔥'];
+    if (!ALLOWED.includes(data.emoji)) return;
+    const socketInfo = Database.activeSockets.get(socketId);
+    const userId = socketInfo.userId;
+    // Find the most recent finished game this player was in
+    let opponentId = null;
+    Database.rematches.forEach(meta => {
+        if (meta.player1Id === userId) opponentId = meta.player2Id;
+        else if (meta.player2Id === userId) opponentId = meta.player1Id;
+    });
+    if (!opponentId) return;
+    const oppSock = getSocketByUserId(opponentId);
+    safeSend(oppSock, { type: 'matchEmoji', emoji: data.emoji });
 }
 
 // Get user balance
