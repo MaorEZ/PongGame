@@ -2010,6 +2010,104 @@ window.clearGraceCountdown = function() {
     if (el) el.remove();
 };
 
+// ── Global Chat ───────────────────────────────────────────────────────────────
+document.getElementById('globalChatBtn').addEventListener('click', () => {
+    closeSlideMenu();
+    hapticFeedback('light');
+    const wagered = AppState.user.totalWagered || 0;
+    const chatLocked   = document.getElementById('chatLocked');
+    const chatUnlocked = document.getElementById('chatUnlocked');
+    if (wagered >= 15) {
+        if (chatLocked)   chatLocked.style.display   = 'none';
+        if (chatUnlocked) chatUnlocked.style.display = 'flex';
+        sendToServer({ type: 'getChat' });
+    } else {
+        if (chatLocked)   chatLocked.style.display   = 'block';
+        if (chatUnlocked) chatUnlocked.style.display = 'none';
+        const prog = document.getElementById('chatWagerProgress');
+        if (prog) prog.textContent = `Progress: $${wagered.toFixed(2)} / $15.00`;
+    }
+    showScreen('globalChatScreen');
+});
+
+document.getElementById('backFromChat').addEventListener('click', () => {
+    hapticFeedback('light');
+    showScreen('mainMenu');
+});
+
+document.getElementById('chatSendBtn').addEventListener('click', () => {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    sendToServer({ type: 'chatMessage', text });
+    input.value = '';
+    input.focus();
+});
+
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('chatSendBtn').click();
+});
+
+// ── Gift Modal ─────────────────────────────────────────────────────────────────
+window.openGiftModal = function(recipientName) {
+    document.getElementById('giftRecipientName').textContent = recipientName;
+    document.getElementById('giftAmount').value = '';
+    window._giftRecipient = recipientName;
+    const modal = document.getElementById('giftModal');
+    modal.style.display = 'flex';
+};
+
+document.getElementById('giftCancelBtn').addEventListener('click', () => {
+    document.getElementById('giftModal').style.display = 'none';
+});
+
+document.getElementById('giftConfirmBtn').addEventListener('click', () => {
+    const amount = parseFloat(document.getElementById('giftAmount').value);
+    if (!amount || amount < 0.5) {
+        showNotification('Minimum gift is $0.50');
+        return;
+    }
+    if (amount > AppState.user.balance) {
+        showNotification('Insufficient balance');
+        hapticFeedback('error');
+        return;
+    }
+    sendToServer({ type: 'giftCredits', toName: window._giftRecipient, amount });
+    document.getElementById('giftModal').style.display = 'none';
+    hapticFeedback('success');
+    showNotification('Gift sent!');
+});
+
+// ── Double or Nothing ──────────────────────────────────────────────────────────
+document.getElementById('doubleOrNothingBtn').addEventListener('click', () => {
+    hapticFeedback('heavy');
+    const matchId = window._doubleMatchId || window._lastMatchId;
+    if (!matchId) { showNotification('Match ID not available'); return; }
+    sendToServer({ type: 'doubleOrNothing', matchId });
+    document.getElementById('doubleOrNothingBtn').style.display = 'none';
+    showNotification('Double or Nothing offer sent!');
+});
+
+document.getElementById('doubleAcceptBtn').addEventListener('click', () => {
+    hapticFeedback('medium');
+    const offerId = window._pendingDoubleOfferId;
+    if (!offerId) return;
+    sendToServer({ type: 'doubleOrNothingAccept', offerId });
+    const banner = document.getElementById('doubleOfferBanner');
+    if (banner) banner.style.display = 'none';
+    window._pendingDoubleOfferId = null;
+});
+
+document.getElementById('doubleDeclineBtn').addEventListener('click', () => {
+    hapticFeedback('light');
+    const offerId = window._pendingDoubleOfferId;
+    if (!offerId) return;
+    sendToServer({ type: 'doubleOrNothingDecline', offerId });
+    const banner = document.getElementById('doubleOfferBanner');
+    if (banner) banner.style.display = 'none';
+    window._pendingDoubleOfferId = null;
+});
+
 // ── Confetti ──────────────────────────────────────────────────────────────────
 window.launchConfetti = function() {
     const canvas = document.getElementById('confettiCanvas');

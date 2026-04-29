@@ -176,6 +176,54 @@ function handleServerMessage(data) {
             showReceivedEmoji(data.emoji);
             break;
 
+        case 'totalWagered':
+            AppState.user.totalWagered = data.amount;
+            break;
+
+        case 'chatHistory':
+            renderChatHistory(data.messages || []);
+            break;
+
+        case 'chatMessage':
+            appendChatMessage(data);
+            break;
+
+        case 'giftReceived':
+            showNotification(`Received $${(data.amount || 0).toFixed(2)} from ${data.fromName || data.from}!`);
+            hapticFeedback('success');
+            requestBalance();
+            break;
+
+        case 'giftSent':
+            showNotification(`Gift sent! -$${(data.amountDeducted || 0).toFixed(2)}`);
+            requestBalance();
+            break;
+
+        case 'doubleOrNothingOffer': {
+            window._pendingDoubleOfferId = data.offerId;
+            const dBanner = document.getElementById('doubleOfferBanner');
+            const dText   = document.getElementById('doubleOfferText');
+            if (dBanner) {
+                if (dText) dText.textContent = `${data.fromName} challenges you — Double or Nothing! ($${(data.betAmount || 0).toFixed(2)} → $${((data.betAmount || 0) * 2).toFixed(2)})`;
+                dBanner.style.display = 'block';
+            }
+            hapticFeedback('medium');
+            showNotification(`${data.fromName} wants Double or Nothing!`);
+            break;
+        }
+
+        case 'doubleOrNothingDeclined':
+            showNotification('Opponent declined the Double or Nothing.');
+            break;
+
+        case 'doubleOrNothingExpired': {
+            const b = document.getElementById('doubleOfferBanner');
+            if (b) b.style.display = 'none';
+            window._pendingDoubleOfferId = null;
+            showNotification('Double or Nothing offer expired.');
+            break;
+        }
+
         case 'balance':
             updateBalance(data.balance);
             break;
@@ -277,6 +325,7 @@ function handleServerMessage(data) {
             // Server says both players matched — load game screen and report ready
             try {
                 console.log('[MATCH] matchReady received, loading game screen');
+                if (data.newBalance !== undefined) updateBalance(data.newBalance);
                 AppState.currentGame = data.game;
                 window._currentRoomId = data.game.id;
                 window.MATCH_ID  = null; // reset for this new match
@@ -471,13 +520,15 @@ function handleServerMessage(data) {
     }
 }
 
-// Open a player's profile by name (called from leaderboard/room browser/result screen)
+// Open a player's profile by name (called from leaderboard/room browser/result screen, chat)
 window.openProfile = function(username) {
     sendToServer({ type: 'getProfile', username });
     showScreen('profileScreen');
     document.getElementById('profileName').textContent = username;
     document.getElementById('profileAvatar').textContent = username ? username[0].toUpperCase() : '?';
     document.getElementById('profileMatches').innerHTML = '<p style="color:#666;font-size:13px;">Loading...</p>';
+    const giftBtn = document.getElementById('profileGiftBtn');
+    if (giftBtn) giftBtn.style.display = 'none';
 };
 
 function showProfileScreen(data) {
@@ -491,6 +542,17 @@ function showProfileScreen(data) {
     document.getElementById('profileWins').textContent = data.wins;
     document.getElementById('profileWinRate').textContent = `${data.winRate}%`;
     document.getElementById('profileEarnings').textContent = `$${(data.earnings || 0).toFixed(2)}`;
+
+    // Show gift button only for other players
+    const giftBtn = document.getElementById('profileGiftBtn');
+    if (giftBtn) {
+        if (data.name && data.name !== AppState.user.name) {
+            giftBtn.style.display = 'inline-block';
+            giftBtn.onclick = () => { if (typeof openGiftModal === 'function') openGiftModal(data.name); };
+        } else {
+            giftBtn.style.display = 'none';
+        }
+    }
 
     const matchesEl = document.getElementById('profileMatches');
     if (!data.recentMatches || data.recentMatches.length === 0) {
@@ -514,6 +576,33 @@ function showReceivedEmoji(emoji) {
     el.style.display = 'block';
     el.textContent = emoji;
     setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Chat rendering helpers
+function appendChatMessage(msg) {
+    const el = document.getElementById('chatMessages');
+    if (!el) return;
+    const isMe = String(msg.userId) === String(AppState.user.id);
+    const div = document.createElement('div');
+    div.style.cssText = `max-width:85%; align-self:${isMe ? 'flex-end' : 'flex-start'};`;
+    const safeName = (typeof escapeHtml === 'function') ? escapeHtml(msg.userName) : msg.userName;
+    const safeText = (typeof escapeHtml === 'function') ? escapeHtml(msg.text) : msg.text;
+    const nameHtml = isMe
+        ? '<span style="color:#94a3b8;">You</span>'
+        : `<span style="cursor:pointer;color:#4fd1c5;text-decoration:underline;" onclick="openProfile('${safeName}')">${safeName}</span>`;
+    div.innerHTML = `
+        <div style="font-size:10px; color:#888; margin-bottom:2px; text-align:${isMe ? 'right' : 'left'};">${nameHtml}</div>
+        <div style="background:${isMe ? 'rgba(79,209,197,0.18)' : 'rgba(255,255,255,0.08)'}; border-radius:10px; padding:8px 12px; font-size:14px; color:#e2e8f0; word-break:break-word;">${safeText}</div>
+    `;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+}
+
+function renderChatHistory(messages) {
+    const el = document.getElementById('chatMessages');
+    if (!el) return;
+    el.innerHTML = '';
+    messages.forEach(msg => appendChatMessage(msg));
 }
 
 // Provably fair: verify server commitment after match

@@ -3078,6 +3078,23 @@ function onGameOver(data) {
         if (typeof startRematchCountdown === 'function') startRematchCountdown();
     }
 
+    // Double or nothing — only loser gets the option
+    const doubleBtn = document.getElementById('doubleOrNothingBtn');
+    if (doubleBtn) {
+        if (!isTie && !iWon) {
+            const doubleAmt = (data.betAmount || 0) * 2;
+            const doubleAmtEl = document.getElementById('doubleOrNothingAmount');
+            if (doubleAmtEl) doubleAmtEl.textContent = doubleAmt.toFixed(2);
+            doubleBtn.style.display = '';
+            window._doubleMatchId = data.matchId;
+        } else {
+            doubleBtn.style.display = 'none';
+        }
+    }
+    // Hide any stale incoming double offer banner
+    const doubleOfferBanner = document.getElementById('doubleOfferBanner');
+    if (doubleOfferBanner) doubleOfferBanner.style.display = 'none';
+
     const reportBtn = document.getElementById('reportMatchBtn');
     if (reportBtn) reportBtn.style.display = 'block';
 

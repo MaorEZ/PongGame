@@ -33,6 +33,7 @@ function persistUserStats(userId, user) {
         losses: user.losses || 0,
         earnings: user.earnings || 0,
         matches_played: user.matchesPlayed || 0,
+        total_wagered: user.totalWagered || 0,
         updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' }).then(({ error }) => {
         if (error) console.error('[DB] Persist error:', error.message);
@@ -477,6 +478,30 @@ function handleClientMessage(socketId, ws, data) {
             handleMatchEmoji(socketId, ws, data);
             break;
 
+        case 'chatMessage':
+            handleChatMessage(socketId, ws, data);
+            break;
+
+        case 'getChat':
+            handleGetChat(socketId, ws);
+            break;
+
+        case 'giftCredits':
+            handleGiftCredits(socketId, ws, data);
+            break;
+
+        case 'doubleOrNothing':
+            handleDoubleOrNothing(socketId, ws, data);
+            break;
+
+        case 'doubleOrNothingAccept':
+            handleDoubleOrNothingAccept(socketId, ws, data);
+            break;
+
+        case 'doubleOrNothingDecline':
+            handleDoubleOrNothingDecline(socketId, ws, data);
+            break;
+
         case 'cancelGame':
             handleCancelGame(socketId, ws, data);
             break;
@@ -580,7 +605,8 @@ function handleRegister(socketId, ws, data) {
             matchHistory: [],
             referralCode: refCode,
             referredBy: null,
-            firstMatchDone: false
+            firstMatchDone: false,
+            totalWagered: 0
         });
         // Restore persisted stats from Supabase (balance, elo, wins, etc.)
         loadUserStats(userId).then(saved => {
@@ -592,6 +618,7 @@ function handleRegister(socketId, ws, data) {
             user.losses       = saved.losses       ?? 0;
             user.earnings     = saved.earnings     ?? 0;
             user.matchesPlayed = saved.matches_played ?? 0;
+            user.totalWagered  = saved.total_wagered  ?? 0;
             const sock = getSocketByUserId(userId);
             safeSend(sock, { type: 'balance', balance: user.balance });
             console.log(`[DB] Restored stats for ${userName}: balance=${user.balance} elo=${user.elo}`);
@@ -641,6 +668,7 @@ function handleRegister(socketId, ws, data) {
     });
 
     ws.send(JSON.stringify({ type: 'balance', balance: user.balance }));
+    ws.send(JSON.stringify({ type: 'totalWagered', amount: user.totalWagered || 0 }));
     ws.send(JSON.stringify({ type: 'referralCode', code: user.referralCode }));
     ws.send(JSON.stringify({
         type: 'playerStats',
@@ -838,6 +866,13 @@ function handleWithdraw(socketId, ws, data) {
     const amount = parseFloat(data.amount);
 
     const user = Database.users.get(userId);
+
+    // Anti-smurf: must have wagered at least $10 before withdrawing
+    if (user && (user.totalWagered || 0) < 10) {
+        safeSend(ws, { type: 'error', message: 'You must wager at least $10 before withdrawing.' });
+        return;
+    }
+
     if (user && user.balance >= amount) {
         user.balance -= amount;
 
@@ -878,6 +913,7 @@ function handleCreateGame(socketId, ws, data) {
 
     // Deduct bet from balance
     user.balance -= betAmount;
+    user.totalWagered = (user.totalWagered || 0) + betAmount;
 
     // Create game
     const gameId = generateId();
@@ -973,6 +1009,7 @@ function handleJoinGame(socketId, ws, data) {
 
     // Deduct bet
     user.balance -= game.betAmount;
+    user.totalWagered = (user.totalWagered || 0) + game.betAmount;
 
     // Assign player 2
     game.player2Id = userId;
@@ -2036,6 +2073,166 @@ function handleGameTimeout(socketId, ws, data) {
 // Generate unique ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+
+// ── Global Chat ───────────────────────────────────────────────────────────────
+const chatHistory = [];
+const chatRateLimit = new Map(); // userId -> lastMessageTime
+
+function handleChatMessage(socketId, ws, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    const userId = socketInfo.userId;
+    const user = Database.users.get(userId);
+    if (!user) return;
+
+    if ((user.totalWagered || 0) < 15) {
+        safeSend(ws, { type: 'chatError', message: `Chat unlocks after wagering $15 total. You've wagered $${(user.totalWagered||0).toFixed(2)}.` });
+        return;
+    }
+
+    const now = Date.now();
+    if (now - (chatRateLimit.get(userId) || 0) < 2000) return;
+    chatRateLimit.set(userId, now);
+
+    const text = String(data.text || '').slice(0, 120).trim();
+    if (!text) return;
+
+    const msg = { username: user.name, text, t: now };
+    chatHistory.push(msg);
+    if (chatHistory.length > 50) chatHistory.shift();
+
+    Database.activeSockets.forEach(info => {
+        if (info.ws && info.ws.readyState === 1) safeSend(info.ws, { type: 'chatMessage', ...msg });
+    });
+}
+
+function handleGetChat(socketId, ws) {
+    safeSend(ws, { type: 'chatHistory', messages: chatHistory });
+}
+
+// ── Gift Credits ──────────────────────────────────────────────────────────────
+function handleGiftCredits(socketId, ws, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    const senderId = socketInfo.userId;
+    const sender = Database.users.get(senderId);
+    const amount = parseFloat(data.amount);
+    const recipientName = String(data.toName || data.recipientName || '').trim();
+
+    if (!sender || isNaN(amount) || amount <= 0) return;
+
+    const fee = parseFloat((amount * 0.005).toFixed(4));
+    const totalDeduct = amount + fee;
+
+    if (sender.balance < totalDeduct) {
+        safeSend(ws, { type: 'error', message: 'Insufficient balance to send gift.' });
+        return;
+    }
+
+    let recipient = null, recipientId = null;
+    Database.users.forEach((u, id) => {
+        if (u.name === recipientName) { recipient = u; recipientId = id; }
+    });
+
+    if (!recipient) { safeSend(ws, { type: 'error', message: 'Player not found or offline.' }); return; }
+    if (recipientId === senderId) { safeSend(ws, { type: 'error', message: 'Cannot gift yourself.' }); return; }
+
+    sender.balance -= totalDeduct;
+    recipient.balance += amount;
+
+    safeSend(ws, { type: 'balance', balance: sender.balance });
+    safeSend(ws, { type: 'giftSent', amount, amountDeducted: totalDeduct, to: recipientName, fee });
+    const recipSock = getSocketByUserId(recipientId);
+    safeSend(recipSock, { type: 'giftReceived', amount, fromName: sender.name, from: sender.name });
+    safeSend(recipSock, { type: 'balance', balance: recipient.balance });
+
+    persistUserStats(senderId, sender);
+    persistUserStats(recipientId, recipient);
+    console.log(`[GIFT] ${sender.name} gifted $${amount} to ${recipientName} (fee $${fee})`);
+}
+
+// ── Double or Nothing ─────────────────────────────────────────────────────────
+const doubleOffers = new Map(); // offerId -> { requesterId, opponentId, betAmount, matchId, timer }
+
+function handleDoubleOrNothing(socketId, ws, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    const requesterId = socketInfo.userId;
+    const meta = Database.rematches.get(data.matchId);
+    if (!meta) { safeSend(ws, { type: 'error', message: 'Match data expired.' }); return; }
+
+    const requester = Database.users.get(requesterId);
+    const opponentId = meta.player1Id === requesterId ? meta.player2Id : meta.player1Id;
+    const doubleBet = meta.betAmount * 2;
+
+    if (!requester || requester.balance < doubleBet) {
+        safeSend(ws, { type: 'error', message: `Need $${doubleBet.toFixed(2)} to double or nothing.` }); return;
+    }
+
+    const offerId = generateId();
+    const timer = setTimeout(() => {
+        doubleOffers.delete(offerId);
+        safeSend(ws, { type: 'doubleOrNothingExpired' });
+    }, 20000);
+
+    doubleOffers.set(offerId, { requesterId, opponentId, betAmount: doubleBet,
+        gameMode: meta.gameMode, requesterName: requester.name,
+        opponentName: meta.player1Id === requesterId ? meta.player2Name : meta.player1Name, timer });
+
+    safeSend(ws, { type: 'doubleOrNothingSent' });
+    const oppSock = getSocketByUserId(opponentId);
+    safeSend(oppSock, { type: 'doubleOrNothingOffer', offerId,
+        fromName: requester.name, betAmount: doubleBet });
+}
+
+function handleDoubleOrNothingAccept(socketId, ws, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    const accepterId = socketInfo.userId;
+    const offer = doubleOffers.get(data.offerId);
+    if (!offer) { safeSend(ws, { type: 'error', message: 'Offer expired.' }); return; }
+
+    clearTimeout(offer.timer);
+    doubleOffers.delete(data.offerId);
+
+    const requester = Database.users.get(offer.requesterId);
+    const accepter = Database.users.get(accepterId);
+    if (!requester || !accepter) return;
+    if (requester.balance < offer.betAmount || accepter.balance < offer.betAmount) {
+        safeSend(ws, { type: 'error', message: 'Insufficient balance.' });
+        safeSend(getSocketByUserId(offer.requesterId), { type: 'error', message: 'Opponent cannot cover the bet.' });
+        return;
+    }
+
+    requester.balance -= offer.betAmount;
+    accepter.balance  -= offer.betAmount;
+    requester.totalWagered = (requester.totalWagered || 0) + offer.betAmount;
+    accepter.totalWagered  = (accepter.totalWagered  || 0) + offer.betAmount;
+
+    const newGameId = generateId();
+    const game = {
+        id: newGameId, creatorId: offer.requesterId,
+        player1Id: offer.requesterId, player1Name: offer.requesterName,
+        player2Id: accepterId, player2Name: offer.opponentName,
+        betAmount: offer.betAmount, gameMode: offer.gameMode,
+        status: 'readyCheck', score: { player1: 0, player2: 0 },
+        currentRound: 1, ballSeed: Math.floor(Math.random() * 2147483647),
+        roundCooldownTimer: null, lastScoreTime: 0
+    };
+    Database.games.set(newGameId, game);
+
+    const gameData = { id: game.id, player1Id: game.player1Id, player1Name: game.player1Name,
+        player2Id: game.player2Id, player2Name: game.player2Name,
+        betAmount: game.betAmount, gameMode: game.gameMode, isAIGame: false, ballSeed: game.ballSeed };
+
+    safeSend(getSocketByUserId(offer.requesterId), { type: 'matchReady', game: gameData, youAre: 'player1', newBalance: requester.balance });
+    safeSend(ws, { type: 'matchReady', game: gameData, youAre: 'player2', newBalance: accepter.balance });
+    console.log(`[DOUBLE] Double-or-nothing game ${newGameId} started at $${offer.betAmount}`);
+}
+
+function handleDoubleOrNothingDecline(socketId, ws, data) {
+    const offer = doubleOffers.get(data.offerId);
+    if (!offer) return;
+    clearTimeout(offer.timer);
+    doubleOffers.delete(data.offerId);
+    safeSend(getSocketByUserId(offer.requesterId), { type: 'doubleOrNothingDeclined' });
 }
 
 // Start server
