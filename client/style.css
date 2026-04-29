@@ -3288,3 +3288,9 @@ textarea:focus {
     min-width: 28px;
     text-align: right;
 }
+
+
+@keyframes tickerScroll {
+    from { transform: translateX(100vw); }
+    to   { transform: translateX(-100%); }
+}

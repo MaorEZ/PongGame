@@ -468,6 +468,10 @@ function handleServerMessage(data) {
             break;
         }
 
+        case 'tickerUpdate':
+            addToTicker('🏆 ' + data.text);
+            break;
+
         case 'referralCode':
             window._myReferralCode = data.code;
             break;
@@ -580,6 +584,20 @@ function showReceivedEmoji(emoji) {
     el.style.display = 'block';
     el.textContent = emoji;
     setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Live match ticker
+window._tickerItems = [];
+function addToTicker(text) {
+    window._tickerItems.unshift(text);
+    if (window._tickerItems.length > 6) window._tickerItems.pop();
+    const el = document.getElementById('liveTicker');
+    if (!el) return;
+    const content = window._tickerItems.join('   ·   ');
+    el.textContent = content + '          ' + content;
+    el.style.animation = 'none';
+    void el.offsetWidth; // force reflow to restart animation
+    el.style.animation = 'tickerScroll 40s linear infinite';
 }
 
 // Chat rendering helpers

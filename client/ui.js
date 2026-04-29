@@ -964,6 +964,19 @@ document.getElementById('confirmDepositBtn').addEventListener('click', () => {
     document.getElementById('depositAmountInput').value = '';
 });
 
+// Live fee preview on withdraw amount input
+document.getElementById('withdrawAmount').addEventListener('input', () => {
+    const amount = parseFloat(document.getElementById('withdrawAmount').value);
+    const note  = document.getElementById('withdrawFeeNote');
+    const netEl = document.getElementById('withdrawNetAmount');
+    if (note && netEl && amount > 0) {
+        note.style.display = 'block';
+        netEl.textContent = (amount * 0.99).toFixed(2);
+    } else if (note) {
+        note.style.display = 'none';
+    }
+});
+
 // Confirm withdrawal
 document.getElementById('confirmWithdrawBtn').addEventListener('click', () => {
     const address = document.getElementById('withdrawAddress').value.trim();

@@ -873,14 +873,14 @@ function handleWithdraw(socketId, ws, data) {
     }
 
     if (user && user.balance >= amount) {
+        const fee = parseFloat((amount * 0.01).toFixed(4));
+        const netPayout = parseFloat((amount - fee).toFixed(4));
         user.balance -= amount;
 
-        ws.send(JSON.stringify({
-            type: 'balance',
-            balance: user.balance
-        }));
+        ws.send(JSON.stringify({ type: 'balance', balance: user.balance }));
+        ws.send(JSON.stringify({ type: 'withdrawalProcessed', amount, fee, netPayout }));
 
-        console.log(`Withdrawal: User ${userId} withdrew ${amount}`);
+        console.log(`Withdrawal: User ${userId} withdrew ${amount} (fee $${fee}, net $${netPayout})`);
     } else {
         ws.send(JSON.stringify({
             type: 'error',
@@ -1798,6 +1798,14 @@ function endMultiplayerMatch(game, winnerId, reason) {
 
     safeSend(p1Socket, makeMsg(game.player1Id));
     safeSend(p2Socket, makeMsg(game.player2Id));
+
+    // Broadcast live ticker to all connected clients
+    if (!isTie && winner && loser) {
+        const s = game.score || { player1: 0, player2: 0 };
+        const hi = Math.max(s.player1, s.player2), lo = Math.min(s.player1, s.player2);
+        const tickerText = `${winner.name} beat ${loser.name} · $${game.betAmount} · ${hi}-${lo}`;
+        Database.activeSockets.forEach(info => safeSend(info.ws, { type: 'tickerUpdate', text: tickerText }));
+    }
 
     // Store rematch metadata
     Database.rematches.set(game.id, {
