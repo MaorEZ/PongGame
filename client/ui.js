@@ -85,7 +85,19 @@ function closeSlideMenu() {
 }
 
 // === Main Menu Game Handlers ===
-document.getElementById('playSquare').addEventListener('click', () => {
+
+// Tap-safe: only fires if touch didn't scroll (>12px vertical movement = scroll)
+function onTap(el, handler) {
+    let startY = 0;
+    el.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+    el.addEventListener('touchend', e => {
+        if (Math.abs(e.changedTouches[0].clientY - startY) < 12) handler();
+    });
+    // Desktop fallback
+    el.addEventListener('click', () => { if (!('ontouchstart' in window)) handler(); });
+}
+
+onTap(document.getElementById('playSquare'), () => {
     hapticFeedback('medium');
     selectedGameMode = selectedGameMode || 'classic';
     selectedBudget = selectedBudget || 10;
