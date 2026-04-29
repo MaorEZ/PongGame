@@ -4,7 +4,7 @@ const AppState = {
         id: null,
         name: '',
         balance: 100,
-        elo: 1000,
+        elo: 100,
         matchesPlayed: 0
     },
     currentGame: null,

@@ -54,7 +54,7 @@ const ADMIN_IDS = new Set([
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 
 // ── ELO & Stake Gate Config ───────────────────────────────────────────────────
-const ELO_START          = 1000; // starting rating for all new players
+const ELO_START          = 100;  // starting rating for all new players
 const ELO_K              = 32;   // standard K-factor
 const NEW_ACCOUNT_MATCHES = 10;  // matches before stake limit lifts
 const NEW_ACCOUNT_MAX_BET = 5;   // max bet (USDT) during new-account period
