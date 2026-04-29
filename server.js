@@ -263,12 +263,22 @@ function startNewRound(game) {
     game.roundReadyFlags = null;
     initBallForRound(game);
     game.roundStartTime = Date.now();
+
+    // Provably fair: on round 1, generate secret + commit to the ball seed
+    if (game.currentRound === 1) {
+        game.serverSecret = crypto.randomBytes(16).toString('hex');
+        game.fairCommitment = crypto.createHash('sha256')
+            .update(game.ballSeed.toString() + game.serverSecret)
+            .digest('hex');
+    }
+
     broadcastToGame(game, {
         type: 'roundStart',
         currentRound: game.currentRound,
         ball: { x: game.ball.x, y: game.ball.y, speedX: game.ball.speedX, speedY: game.ball.speedY },
         paddle1X: game.paddle1.x, paddle2X: game.paddle2.x,
-        serverTime: Date.now()
+        serverTime: Date.now(),
+        fairCommitment: game.currentRound === 1 ? game.fairCommitment : undefined
     });
     startPhysicsLoop(game);
     startPingLoop(game);
@@ -1578,7 +1588,12 @@ function endMultiplayerMatch(game, winnerId, reason) {
             reason: reason,
             eloChange: eloChange,
             newElo: player ? (player.elo || ELO_START) : ELO_START,
-            matchesPlayed: player ? (player.matchesPlayed || 0) : 0
+            matchesPlayed: player ? (player.matchesPlayed || 0) : 0,
+            fairReveal: game.ballSeed !== undefined ? {
+                ballSeed: game.ballSeed,
+                serverSecret: game.serverSecret,
+                commitment: game.fairCommitment
+            } : undefined
         };
     };
 

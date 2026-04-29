@@ -346,6 +346,7 @@ function handleServerMessage(data) {
 
         case 'roundStart':
             // Both clients ready — server activates the round
+            if (data.fairCommitment) AppState.fairCommitment = data.fairCommitment;
             try {
                 if (typeof window.onRoundStart === 'function') window.onRoundStart(data);
             } catch (e) { console.error('[ROUND] roundStart error:', e); }
@@ -355,6 +356,7 @@ function handleServerMessage(data) {
             // Server-authoritative game end — update ELO before forwarding to game.js
             if (data.newElo !== undefined) AppState.user.elo = data.newElo;
             if (data.matchesPlayed !== undefined) AppState.user.matchesPlayed = data.matchesPlayed;
+            if (data.fairReveal) verifyProvablyFair(data.fairReveal);
             try {
                 if (typeof activeRoom !== 'undefined') activeRoom = null;
                 if (typeof onGameOver === 'function') onGameOver(data);
@@ -456,6 +458,36 @@ function handleServerMessage(data) {
         default:
             console.log('Unknown message type:', data.type);
     }
+}
+
+// Provably fair: verify server commitment after match
+async function verifyProvablyFair({ ballSeed, serverSecret, commitment }) {
+    try {
+        const msg = ballSeed.toString() + serverSecret;
+        const encoded = new TextEncoder().encode(msg);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+        const computed = Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+        const verified = computed === commitment;
+        AppState.lastFairness = { ballSeed, serverSecret, commitment, computed, verified };
+        showFairnessResult(verified, ballSeed, serverSecret, commitment);
+    } catch (e) {
+        console.error('Fairness verification failed:', e);
+    }
+}
+
+function showFairnessResult(verified, ballSeed, serverSecret, commitment) {
+    const el = document.getElementById('fairnessResult');
+    const icon = document.getElementById('fairnessIcon');
+    const details = document.getElementById('fairnessDetails');
+    if (!el) return;
+    el.style.display = 'block';
+    icon.textContent = verified ? '✓ Provably Fair' : '✗ Verification Failed';
+    icon.style.color = verified ? '#10b981' : '#ef4444';
+    details.innerHTML =
+        `<div class="fair-row"><span>Seed</span><code>${ballSeed}</code></div>` +
+        `<div class="fair-row"><span>Secret</span><code>${serverSecret.slice(0,8)}…</code></div>` +
+        `<div class="fair-row"><span>Commitment</span><code>${commitment.slice(0,16)}…</code></div>`;
 }
 
 // Request user balance from server

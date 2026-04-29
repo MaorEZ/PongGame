@@ -1552,6 +1552,8 @@ function endMultiplayerGame() {
     const amountWon   = document.getElementById('amountWon');
     const finalScore  = document.getElementById('finalScore');
     const newBalance  = document.getElementById('newBalance');
+    const fairEl      = document.getElementById('fairnessResult');
+    if (fairEl) fairEl.style.display = 'none'; // reset until server sends reveal
 
     if (isTie) {
         resultTitle.textContent = 'Draw!';
