@@ -52,13 +52,14 @@
     <div id="loadingScreen" class="screen active">
         <div class="loading-content">
             <div class="loading-logo">
-                <div class="logo-accent-line"></div>
-                <div class="logo-stack">
-                    <span class="logo-go">GO</span>
+                <div class="logo-stack-new">
+                    <div class="logo-row-1">
+                        <span class="logo-go">GO</span><span class="logo-vs-box">VS</span>
+                    </div>
                     <span class="logo-against">AGAINST</span>
-                    <span class="logo-me">ME</span>
+                    <span class="logo-me">ME.</span>
                 </div>
-                <div class="logo-accent-line bottom"></div>
+                <div class="logo-tagline">WHERE SKILL PAYS</div>
             </div>
             <div class="loader"></div>
         </div>
@@ -82,77 +83,123 @@
 
     <!-- Main Menu Screen -->
     <div id="mainMenu" class="screen">
-        <canvas id="menuBgCanvas"></canvas>
-        <div class="main-menu-container">
-            <!-- Hamburger Menu Button -->
-            <button class="hamburger-menu" id="hamburgerBtn">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
+        <!-- Hidden legacy canvas required by JS -->
+        <canvas id="menuBgCanvas" style="display:none"></canvas>
+        <canvas id="menuPaddleBallIcon" width="80" height="80" style="display:none"></canvas>
+        <!-- Hidden legacy buttons -->
+        <button id="comingSoon1" style="display:none"></button>
+        <button id="comingSoon2" style="display:none"></button>
 
-            <!-- Logo -->
-            <div class="logo-container">
-                <div class="logo-accent-line"></div>
-                <div class="logo-stack">
-                    <span class="logo-go">GO</span>
-                    <span class="logo-against">AGAINST</span>
-                    <span class="logo-me">ME</span>
+        <div class="main-menu-container">
+
+            <!-- Status bar -->
+            <div class="gam-status-bar">
+                <span>GAM // ARENA</span>
+                <div class="online-count" id="onlineCount">
+                    <div class="online-dot"></div>
+                    <span id="onlineCountText">connecting...</span>
                 </div>
-                <div class="logo-accent-line bottom"></div>
+            </div>
+
+            <!-- Identity + Balance top bar -->
+            <div class="gam-topbar">
+                <button class="gam-identity" id="hamburgerBtn">
+                    <div class="gam-avatar" id="menuProfileAvatar">?</div>
+                    <div>
+                        <span class="gam-identity-name" id="userName">Player</span>
+                        <span class="gam-identity-sub">↗ menu</span>
+                    </div>
+                </button>
+                <div class="gam-balance-widget">
+                    <div class="gam-balance-display">
+                        <span class="gam-balance-label">BALANCE</span>
+                        <span class="gam-balance-num" id="balanceAmount">0.00</span>
+                    </div>
+                    <button class="gam-bal-btn" onclick="document.getElementById('depositBtn').click()">+</button>
+                    <button class="gam-bal-btn" style="background:var(--bone);color:var(--ink);border-left:1.5px solid var(--ink)" onclick="document.getElementById('withdrawBtn').click()">↗</button>
+                </div>
+            </div>
+
+            <!-- Wordmark -->
+            <div class="gam-wordmark-section">
+                <div class="logo-stack-new">
+                    <div class="logo-row-1">
+                        <span class="logo-go">GO</span><span class="logo-vs-box">VS</span>
+                    </div>
+                    <span class="logo-against">AGAINST</span>
+                    <span class="logo-me">ME.</span>
+                </div>
                 <div class="logo-tagline">WHERE SKILL PAYS</div>
             </div>
 
-            <!-- User Info -->
-            <div class="user-info">
-                <div class="user-name" id="userName">Player</div>
-                <div class="balance">
-                    <span class="balance-label">Balance:</span>
-                    <span class="balance-amount" id="balanceAmount">100.00</span>
-                    <span class="currency">USDT</span>
-                </div>
+            <!-- Ticker tape -->
+            <div class="gam-tape-wrap">
+                <div id="liveTicker">⬢ WAITING FOR LIVE MATCHES &nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp; ⬢ WAITING FOR LIVE MATCHES &nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp; ⬢ WAITING FOR LIVE MATCHES &nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;</div>
             </div>
 
-            <!-- Online count -->
-            <div class="online-count" id="onlineCount">
-                <div class="online-dot"></div>
-                <span id="onlineCountText">connecting...</span>
-            </div>
+            <!-- Scrollable game content -->
+            <div class="gam-scroll">
+                <div class="gam-div-label">▸ PICK YOUR FIGHT</div>
 
-            <!-- Live Match Ticker -->
-            <div style="overflow:hidden; width:100%; height:18px; position:relative; margin:4px 0 6px 0;">
-                <div id="liveTicker" style="position:absolute; white-space:nowrap; font-size:11px; color:#4a5568; animation:tickerScroll 40s linear infinite; will-change:transform;">
-                    🏆 Waiting for live matches...&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🏆 Waiting for live matches...
-                </div>
-            </div>
-
-            <!-- Hook Text -->
-            <div class="arena-hook">Pick A Game</div>
-
-            <!-- 2x2 Main Menu Grid -->
-            <div class="menu-grid-2x2">
-                <button class="menu-square" id="playSquare">
-                    <div class="square-icon-wrap">
-                        <canvas id="menuPaddleBallIcon" width="80" height="80"></canvas>
+                <!-- Paddle Ball hero card -->
+                <button class="gam-game-card gam-game-card--hero" id="playSquare">
+                    <div class="gam-game-card-top">
+                        <div>
+                            <div class="gam-chips">
+                                <span class="gam-chip gam-chip--acid">▸ LIVE</span>
+                                <span class="gam-chip gam-chip--outline">1V1</span>
+                            </div>
+                            <div class="gam-game-title">PADDLE<br>BALL.</div>
+                            <div class="gam-game-subtitle">CLASSIC · CHAOTIC · 2 MODES</div>
+                        </div>
+                        <div class="gam-arrow">→</div>
                     </div>
-                    <div class="square-label">Paddle Ball</div>
-                    <div class="square-desc">Wager & Compete</div>
+                    <div class="gam-paddle-preview">
+                        <div class="gam-paddle-l"></div>
+                        <div class="gam-ball-dot"></div>
+                        <div class="gam-paddle-r"></div>
+                        <div class="gam-midline"></div>
+                        <div class="gam-preview-label">AVG MATCH 1:42</div>
+                    </div>
+                    <div class="gam-bets-strip">
+                        <div class="gam-bet-amount">$5</div>
+                        <div class="gam-bet-amount">$10</div>
+                        <div class="gam-bet-amount">$20</div>
+                        <div class="gam-bet-amount">$40</div>
+                        <div class="gam-bet-amount">$100</div>
+                    </div>
                 </button>
-                <button class="menu-square" id="practiceSquare">
-                    <div class="square-icon">🤖</div>
-                    <div class="square-label">Practice</div>
-                    <div class="square-desc">vs AI Bot</div>
+
+                <!-- Snake Royale coming soon -->
+                <div class="gam-game-card gam-game-card--soon">
+                    <div class="gam-game-card-top">
+                        <div>
+                            <div class="gam-chips">
+                                <span class="gam-chip gam-chip--red">▸ DROPPING SOON</span>
+                                <span class="gam-chip gam-chip--dim">BR · 8P</span>
+                            </div>
+                            <div class="gam-soon-title">SNAKE<br>ROYALE.</div>
+                            <div class="gam-game-subtitle" style="color:var(--mute)">LAST · SNAKE · STANDING</div>
+                        </div>
+                        <div style="font-family:var(--disp-f);font-size:28px;color:var(--ink);font-style:italic;font-weight:800;opacity:0.18">▦</div>
+                    </div>
+                    <div class="gam-soon-banner">
+                        <div class="gam-soon-stripes"></div>
+                        <div class="gam-soon-text">COMING <span style="color:var(--red)">SOON.</span></div>
+                        <div class="gam-soon-tag">▸ SOON™</div>
+                    </div>
+                </div>
+
+                <!-- Practice dashed strip -->
+                <button class="gam-practice-btn" id="practiceSquare">
+                    <div>
+                        <span class="gam-practice-no-money">NO MONEY</span>
+                        <span class="gam-practice-label">Practice vs AI</span>
+                    </div>
+                    <span class="gam-practice-arrow">→</span>
                 </button>
-                <button class="menu-square coming-soon-square" id="comingSoon1">
-                    <div class="square-icon coming-soon-icon">?</div>
-                    <div class="square-label">???</div>
-                    <div class="square-desc">Coming Soon</div>
-                </button>
-                <button class="menu-square coming-soon-square" id="comingSoon2">
-                    <div class="square-icon coming-soon-icon">?</div>
-                    <div class="square-label">???</div>
-                    <div class="square-desc">Coming Soon</div>
-                </button>
+
+                <div style="height:24px"></div>
             </div>
 
             <!-- Slide-out Menu -->
