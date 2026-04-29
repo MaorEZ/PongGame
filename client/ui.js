@@ -1238,7 +1238,14 @@ document.getElementById('confirmBanBtn').addEventListener('click', () => {
 // Helper function to update Match ID in result screen
 window.setResultMatchId = function(matchId) {
     currentMatchId = matchId;
-    document.getElementById('resultMatchId').textContent = matchId;
+    const el = document.getElementById('resultMatchId');
+    el.textContent = matchId ? matchId.slice(0, 12) + '…' : '---';
+    el.onclick = () => {
+        navigator.clipboard.writeText(matchId).then(() => {
+            el.textContent = 'Copied!';
+            setTimeout(() => { el.textContent = matchId ? matchId.slice(0, 12) + '…' : '---'; }, 1500);
+        }).catch(() => {});
+    };
 };
 
 // AI Game Functions

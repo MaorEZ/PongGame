@@ -25,6 +25,13 @@
     </script>
 </head>
 <body>
+    <!-- Reconnect overlay — shown when WebSocket drops, hidden on reconnect -->
+    <div id="reconnectOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+        <div style="width:40px;height:40px;border:3px solid #4fd1c5;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <p style="color:#fff;font-size:16px;font-weight:600;">Reconnecting...</p>
+        <p style="color:#aaa;font-size:13px;">Please wait</p>
+    </div>
+
     <!-- Rematch Offer Banner (shown over any screen when opponent challenges you) -->
     <div id="rematchOfferBanner" class="rematch-offer-banner" style="display:none;">
         <div class="rematch-offer-inner">
@@ -562,7 +569,9 @@
                 </div>
                 <div class="result-details">
                     <p>Final Score: <span id="finalScore">3-1</span></p>
-                    <p>Match ID: <span id="resultMatchId">---</span></p>
+                    <p style="font-size:12px;color:#666;">
+                        Proof ID: <span id="resultMatchId" style="font-family:monospace;color:#4fd1c5;cursor:pointer;" title="Tap to copy">---</span>
+                    </p>
                     <p>New Balance: <span id="newBalance">19.00</span> USDT</p>
                     <p class="elo-change-row" id="eloChangeRow" style="display:none;">
                         ELO: <span id="eloChangeText"></span> → <span id="eloNewText"></span>

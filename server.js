@@ -6,6 +6,38 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { createClient: createSupabase } = require('@supabase/supabase-js');
+
+const db = createSupabase(
+    'https://qfzbhjnksngtlihuovcm.supabase.co',
+    'sb_publishable_wXqf6IXKxjlMknuLEFKT8w_r2KfM8tr'
+);
+
+// Load a user's persisted stats from Supabase
+async function loadUserStats(userId) {
+    try {
+        const { data } = await db.from('game_stats')
+            .select('*').eq('user_id', String(userId)).single();
+        return data;
+    } catch { return null; }
+}
+
+// Persist user stats after a match (fire-and-forget)
+function persistUserStats(userId, user) {
+    db.from('game_stats').upsert({
+        user_id: String(userId),
+        username: user.name,
+        balance: user.balance,
+        elo: user.elo || ELO_START,
+        wins: user.wins || 0,
+        losses: user.losses || 0,
+        earnings: user.earnings || 0,
+        matches_played: user.matchesPlayed || 0,
+        updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' }).then(({ error }) => {
+        if (error) console.error('[DB] Persist error:', error.message);
+    });
+}
 
 // ── Security Config ───────────────────────────────────────────────────────────
 const PORT = 3000;
@@ -542,6 +574,20 @@ function handleRegister(socketId, ws, data) {
             referredBy: null,
             firstMatchDone: false
         });
+        // Restore persisted stats from Supabase (balance, elo, wins, etc.)
+        loadUserStats(userId).then(saved => {
+            const user = Database.users.get(userId);
+            if (!user || !saved) return;
+            user.balance      = saved.balance      ?? 100;
+            user.elo          = saved.elo          ?? ELO_START;
+            user.wins         = saved.wins         ?? 0;
+            user.losses       = saved.losses       ?? 0;
+            user.earnings     = saved.earnings     ?? 0;
+            user.matchesPlayed = saved.matches_played ?? 0;
+            const sock = getSocketByUserId(userId);
+            safeSend(sock, { type: 'balance', balance: user.balance });
+            console.log(`[DB] Restored stats for ${userName}: balance=${user.balance} elo=${user.elo}`);
+        }).catch(e => console.error('[DB] Load error:', e.message));
     } else {
         const user = Database.users.get(userId);
         user.socketId = socketId;
@@ -613,27 +659,44 @@ function handleApplyReferral(socketId, ws, data) {
     safeSend(ws, { type: 'referralApplied' });
 }
 
-// Get leaderboard data
-function handleGetLeaderboard(socketId, ws, data) {
-    const players = [];
-    Database.users.forEach((user, userId) => {
-        if (user.wins > 0 || user.losses > 0) {
-            players.push({
-                name: user.name,
-                wins: user.wins,
-                losses: user.losses,
-                earnings: user.earnings,
-                elo: user.elo || ELO_START,
-                matchesPlayed: user.matchesPlayed || 0
+// Get leaderboard data — queries Supabase so rankings survive restarts
+async function handleGetLeaderboard(socketId, ws, data) {
+    try {
+        const { data: rows, error } = await db.from('game_stats')
+            .select('username, wins, losses, earnings, elo, matches_played')
+            .gt('matches_played', 0);
+
+        if (error) throw error;
+
+        const players = (rows || []).map(r => ({
+            name: r.username,
+            wins: r.wins || 0,
+            losses: r.losses || 0,
+            earnings: r.earnings || 0,
+            elo: r.elo || ELO_START,
+            matchesPlayed: r.matches_played || 0
+        }));
+
+        const byEarnings = [...players].sort((a, b) => b.earnings - a.earnings).slice(0, 10);
+        const byWins     = [...players].sort((a, b) => b.wins - a.wins).slice(0, 10);
+        const byElo      = [...players].sort((a, b) => b.elo - a.elo).slice(0, 10);
+
+        safeSend(ws, { type: 'leaderboard', byEarnings, byWins, byElo });
+    } catch (e) {
+        console.error('[DB] Leaderboard error:', e.message);
+        // Fallback to in-memory
+        const players = [];
+        Database.users.forEach(user => {
+            if (user.wins > 0 || user.losses > 0) players.push({
+                name: user.name, wins: user.wins, losses: user.losses,
+                earnings: user.earnings, elo: user.elo || ELO_START
             });
-        }
-    });
-
-    const byEarnings = [...players].sort((a, b) => b.earnings - a.earnings).slice(0, 10);
-    const byWins     = [...players].sort((a, b) => b.wins - a.wins).slice(0, 10);
-    const byElo      = [...players].sort((a, b) => b.elo - a.elo).slice(0, 10);
-
-    ws.send(JSON.stringify({ type: 'leaderboard', byEarnings, byWins, byElo }));
+        });
+        const byEarnings = [...players].sort((a, b) => b.earnings - a.earnings).slice(0, 10);
+        const byWins     = [...players].sort((a, b) => b.wins - a.wins).slice(0, 10);
+        const byElo      = [...players].sort((a, b) => b.elo - a.elo).slice(0, 10);
+        safeSend(ws, { type: 'leaderboard', byEarnings, byWins, byElo });
+    }
 }
 
 // Get match history for the requesting user
@@ -1569,6 +1632,12 @@ function endMultiplayerMatch(game, winnerId, reason) {
     }
 
     console.log(`[GAME OVER] Game ${game.id} ended. Winner: ${winnerId || 'tie'}, reason: ${reason}`);
+
+    // Persist both players' updated stats to Supabase
+    const _p1 = Database.users.get(game.player1Id);
+    const _p2 = Database.users.get(game.player2Id);
+    if (_p1) persistUserStats(game.player1Id, _p1);
+    if (_p2) persistUserStats(game.player2Id, _p2);
 
     const p1Socket = getSocketByUserId(game.player1Id);
     const p2Socket = getSocketByUserId(game.player2Id);

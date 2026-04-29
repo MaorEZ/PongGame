@@ -102,6 +102,8 @@ function connectToServer() {
 
         AppState.socket.onopen = () => {
             console.log('Connected to game server');
+            const overlay = document.getElementById('reconnectOverlay');
+            if (overlay) overlay.style.display = 'none';
 
             // Register user with server — include initData so server can verify identity
             AppState.socket.send(JSON.stringify({
@@ -133,12 +135,13 @@ function connectToServer() {
 
         AppState.socket.onerror = (error) => {
             console.error('WebSocket error:', error);
-            showNotification('Connection error. Please try again.');
         };
 
         AppState.socket.onclose = () => {
-            console.log('Disconnected from server');
-            showNotification('Disconnected from server');
+            console.log('Disconnected — retrying in 2s');
+            const overlay = document.getElementById('reconnectOverlay');
+            if (overlay) overlay.style.display = 'flex';
+            setTimeout(() => connectToServer(), 2000);
         };
 
     } catch (error) {
