@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(while read elem)",
+      "Bash(do)",
+      "Bash(if ! grep -q \"id=\"\"$elem\"\"\" \"c:\\\\Users\\\\97254\\\\OneDrive\\\\Desktop\\\\MyJavascriptFolder\\\\main1.html\")",
+      "Bash(then)",
+      "Bash(echo:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(for func in animateMenuPaddleBall closeSlideMenu drawSkinPreview filterGames getMockRooms joinGame joinRoom previewAnimLoop previewCapsulePath requestGamesList requestRoomList showWaitingRoom startAIGame startRematchCountdown startWaitingCountdown updateCustomizationUI updateGamesList updateLeaderboardUI updateRoomBrowser updateStatsUI)",
+      "Bash(if grep -q \"^function $func\" \"c:\\\\Users\\\\97254\\\\OneDrive\\\\Desktop\\\\MyJavascriptFolder\\\\main4.js\")",
+      "Bash(else)",
+      "Bash(python3:*)",
+      "Bash(Get-Content \"c:/Users/97254/OneDrive/Desktop/MyJavascriptFolder/main2.css\")",
+      "Bash(Measure-Object -Line)",
+      "Bash(Select-Object -ExpandProperty Lines)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(netsh advfirewall firewall add rule:*)",
+      "Bash(ipconfig:*)",
+      "Bash(dir:*)",
+      "Bash(node -e:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(timeout 3 node:*)"
+    ]
+  }
+}

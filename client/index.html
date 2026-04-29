@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Paddle Ball Arena</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Telegram Web App Script -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Supabase (local bundle — no CDN dependency) -->
+    <script src="supabase.js"></script>
+    <script>
+        console.log('[DB] supabase.js loaded, global=', typeof supabase);
+        try {
+            window.supabase = supabase.createClient(
+                "https://qfzbhjnksngtlihuovcm.supabase.co",
+                "sb_publishable_wXqf6IXKxjlMknuLEFKT8w_r2KfM8tr"
+            );
+            console.log('[DB] Supabase client initialized', window.supabase);
+        } catch(e) {
+            console.error('[DB] Supabase createClient failed:', e);
+        }
+    </script>
+</head>
+<body>
+    <!-- Rematch Offer Banner (shown over any screen when opponent challenges you) -->
+    <div id="rematchOfferBanner" class="rematch-offer-banner" style="display:none;">
+        <div class="rematch-offer-inner">
+            <span class="rematch-offer-text">
+                <strong id="rematchOfferName">Opponent</strong> wants a rematch!
+                <em id="rematchOfferDetails"></em>
+            </span>
+            <div class="rematch-offer-actions">
+                <button class="rematch-offer-btn accept" id="rematchAcceptBtn">Accept</button>
+                <button class="rematch-offer-btn decline" id="rematchDeclineBtn">Decline</button>
+            </div>
+            <span class="rematch-offer-timer" id="rematchOfferTimer">30s</span>
+        </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <div class="logo-accent-line"></div>
+                <div class="logo-stack">
+                    <span class="logo-go">GO</span>
+                    <span class="logo-against">AGAINST</span>
+                    <span class="logo-me">ME</span>
+                </div>
+                <div class="logo-accent-line bottom"></div>
+            </div>
+            <div class="loader"></div>
+        </div>
+    </div>
+
+    <!-- Name Setup Screen -->
+    <div id="nameSetupScreen" class="screen">
+        <div class="container">
+            <div class="name-setup-content">
+                <h2>Choose Your Name</h2>
+                <p class="info-text">This is your public display name on the leaderboard.</p>
+                <div class="name-input-group">
+                    <input type="text" id="nameInput" class="name-input" placeholder="Enter your name..." maxlength="16" autocomplete="off">
+                    <p class="name-rules">3-16 characters. Letters, numbers, underscores only.</p>
+                </div>
+                <p class="name-changes-left" id="nameChangesLeft">Name changes remaining: 3</p>
+                <button class="btn btn-primary" id="confirmNameBtn">Confirm Name</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Menu Screen -->
+    <div id="mainMenu" class="screen">
+        <canvas id="menuBgCanvas"></canvas>
+        <div class="main-menu-container">
+            <!-- Hamburger Menu Button -->
+            <button class="hamburger-menu" id="hamburgerBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Logo -->
+            <div class="logo-container">
+                <div class="logo-accent-line"></div>
+                <div class="logo-stack">
+                    <span class="logo-go">GO</span>
+                    <span class="logo-against">AGAINST</span>
+                    <span class="logo-me">ME</span>
+                </div>
+                <div class="logo-accent-line bottom"></div>
+                <div class="logo-tagline">WHERE SKILL PAYS</div>
+            </div>
+
+            <!-- User Info -->
+            <div class="user-info">
+                <div class="user-name" id="userName">Player</div>
+                <div class="balance">
+                    <span class="balance-label">Balance:</span>
+                    <span class="balance-amount" id="balanceAmount">100.00</span>
+                    <span class="currency">USDT</span>
+                </div>
+            </div>
+
+            <!-- Online count -->
+            <div class="online-count" id="onlineCount">
+                <div class="online-dot"></div>
+                <span id="onlineCountText">connecting...</span>
+            </div>
+
+            <!-- Hook Text -->
+            <div class="arena-hook">Pick A Game</div>
+
+            <!-- 2x2 Main Menu Grid -->
+            <div class="menu-grid-2x2">
+                <button class="menu-square" id="playSquare">
+                    <div class="square-icon-wrap">
+                        <canvas id="menuPaddleBallIcon" width="80" height="80"></canvas>
+                    </div>
+                    <div class="square-label">Paddle Ball</div>
+                    <div class="square-desc">Wager & Compete</div>
+                </button>
+                <button class="menu-square" id="practiceSquare">
+                    <div class="square-icon">🤖</div>
+                    <div class="square-label">Practice</div>
+                    <div class="square-desc">vs AI Bot</div>
+                </button>
+                <button class="menu-square coming-soon-square" id="comingSoon1">
+                    <div class="square-icon coming-soon-icon">?</div>
+                    <div class="square-label">???</div>
+                    <div class="square-desc">Coming Soon</div>
+                </button>
+                <button class="menu-square coming-soon-square" id="comingSoon2">
+                    <div class="square-icon coming-soon-icon">?</div>
+                    <div class="square-label">???</div>
+                    <div class="square-desc">Coming Soon</div>
+                </button>
+            </div>
+
+            <!-- Slide-out Menu -->
+            <div class="slide-menu" id="slideMenu">
+                <div class="slide-menu-header">
+                    <div class="menu-profile">
+                        <div class="menu-profile-avatar" id="menuProfileAvatar">?</div>
+                        <div class="menu-profile-info">
+                            <div class="menu-profile-name" id="menuProfileName">Player</div>
+                            <div class="menu-profile-balance" id="menuProfileBalance">$0.00 USDT</div>
+                        </div>
+                        <button class="menu-profile-close" id="closeMenuBtn">✕</button>
+                    </div>
+                    <div class="menu-profile-stats">
+                        <div class="menu-stat">
+                            <div class="menu-stat-val" id="menuStatWins">0</div>
+                            <div class="menu-stat-lbl">Wins</div>
+                        </div>
+                        <div class="menu-stat">
+                            <div class="menu-stat-val" id="menuStatLosses">0</div>
+                            <div class="menu-stat-lbl">Losses</div>
+                        </div>
+                        <div class="menu-stat">
+                            <div class="menu-stat-val" id="menuStatWinRate">0%</div>
+                            <div class="menu-stat-lbl">Win Rate</div>
+                        </div>
+                        <div class="menu-stat">
+                            <div class="menu-stat-val" id="menuStatElo">1000</div>
+                            <div class="menu-stat-lbl">ELO</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-menu-content">
+                    <button class="menu-item" id="playAIBtn">
+                        <span class="menu-icon">🤖</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Practice vs AI</div>
+                            <div class="menu-desc">Test your skills</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="depositBtn">
+                        <span class="menu-icon">💰</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Deposit Funds</div>
+                            <div class="menu-desc">Add USDT to play</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="withdrawBtn">
+                        <span class="menu-icon">💸</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Withdraw</div>
+                            <div class="menu-desc">Cash out winnings</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="customizationBtn">
+                        <span class="menu-icon">🎨</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Customization</div>
+                            <div class="menu-desc">Unlock paddle skins</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="statsBtn">
+                        <span class="menu-icon">📊</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Statistics</div>
+                            <div class="menu-desc">View your stats</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="matchHistoryBtn">
+                        <span class="menu-icon">📋</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Match History</div>
+                            <div class="menu-desc">Last 20 matches</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="leaderboardBtn">
+                        <span class="menu-icon">🏆</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Leaderboard</div>
+                            <div class="menu-desc">Top 10 players</div>
+                        </div>
+                    </button>
+                    <button class="menu-item" id="changeNameBtn">
+                        <span class="menu-icon">✏️</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Change Name</div>
+                            <div class="menu-desc">Update display name</div>
+                        </div>
+                    </button>
+
+                    <button class="menu-item" id="referralBtn">
+                        <span class="menu-icon">🔗</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Invite Friends</div>
+                            <div class="menu-desc">Earn bonus on their first win</div>
+                        </div>
+                    </button>
+
+                    <button class="menu-item" id="supportBtn">
+                        <span class="menu-icon">❓</span>
+                        <div class="menu-text">
+                            <div class="menu-title">Support</div>
+                            <div class="menu-desc">Get help</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Menu Overlay -->
+            <div class="menu-overlay" id="menuOverlay"></div>
+
+            <!-- AI Mode Selection Modal -->
+            <div class="ai-mode-modal" id="aiModeModal">
+                <div class="ai-mode-content">
+                    <h2>Select Practice Mode</h2>
+                    <div class="ai-mode-grid">
+                        <button class="ai-mode-btn" data-mode="classic">
+                            <div class="mode-icon">⚡</div>
+                            <div class="mode-name">Classic</div>
+                            <div class="mode-desc">Traditional gameplay</div>
+                        </button>
+                        <button class="ai-mode-btn" data-mode="chaotic">
+                            <div class="mode-icon">🎲</div>
+                            <div class="mode-name">Chaotic</div>
+                            <div class="mode-desc">Random freezes & speed!</div>
+                        </button>
+                    </div>
+                    <button class="btn btn-secondary" id="cancelAIModeBtn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Play Mode Select Screen -->
+    <div id="playModeScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromPlayMode">← Back</button>
+            <h2>Choose Game Mode</h2>
+            <div class="play-mode-grid">
+                <button class="play-mode-card" data-playmode="classic">
+                    <div class="play-mode-icon">⚡</div>
+                    <div class="play-mode-name">Classic</div>
+                    <div class="play-mode-desc">Pure skill. Clean and competitive.</div>
+                </button>
+                <button class="play-mode-card" data-playmode="chaotic">
+                    <div class="play-mode-icon">🎲</div>
+                    <div class="play-mode-name">Chaotic</div>
+                    <div class="play-mode-desc">Power-ups, multi-balls, shrinking paddles!</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Select Screen -->
+    <div id="budgetScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromBudget">← Back</button>
+            <h2>Select Your Budget</h2>
+            <p class="info-text" id="budgetModeLabel">Mode: Classic</p>
+            <div class="budget-grid">
+                <button class="budget-btn" data-budget="5">$5</button>
+                <button class="budget-btn" data-budget="10">$10</button>
+                <button class="budget-btn" data-budget="20">$20</button>
+                <button class="budget-btn" data-budget="40">$40</button>
+                <button class="budget-btn" data-budget="100">$100</button>
+            </div>
+            <p class="info-text" style="margin-top: 10px; opacity: 0.6;">You'll see rooms at or below your budget</p>
+        </div>
+    </div>
+
+    <!-- Room Browser Screen -->
+    <div id="roomBrowserScreen" class="screen">
+        <!-- Toolbar -->
+        <div class="rb-toolbar">
+            <button class="rb-back" id="backFromRoomBrowser">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="rb-toolbar-title">Rooms</div>
+            <div class="rb-toolbar-pills">
+                <span class="rb-pill rb-pill-mode" id="roomModeBadge">Classic</span>
+                <span class="rb-pill rb-pill-budget" id="roomBudgetBadge">$10</span>
+            </div>
+        </div>
+        <!-- Pinned own room -->
+        <div id="myRoomSlot" class="rb-my-room"></div>
+        <!-- Scrollable room list -->
+        <div id="roomList" class="rb-list"></div>
+        <!-- Bottom action -->
+        <div class="rb-bottom">
+            <button class="rb-create-btn" id="createRoomBtn">+ Create Room</button>
+        </div>
+    </div>
+
+    <!-- Match Countdown Screen -->
+    <div id="matchCountdownScreen" class="screen">
+        <div class="mc-container">
+            <div class="mc-header">Match Found</div>
+            <div class="mc-players">
+                <div class="mc-player">
+                    <div class="mc-avatar mc-p1" id="mcPlayer1Avatar">P1</div>
+                    <div class="mc-name" id="mcPlayer1Name">Player 1</div>
+                </div>
+                <div class="mc-vs">VS</div>
+                <div class="mc-player">
+                    <div class="mc-avatar mc-p2" id="mcPlayer2Avatar">P2</div>
+                    <div class="mc-name" id="mcPlayer2Name">Player 2</div>
+                </div>
+            </div>
+            <div class="mc-info">
+                <span class="mc-mode" id="mcMode">Classic</span>
+                <span class="mc-wager" id="mcWager">$10</span>
+            </div>
+            <div class="mc-countdown-ring">
+                <svg class="mc-ring-svg" viewBox="0 0 120 120">
+                    <circle class="mc-ring-bg" cx="60" cy="60" r="52" />
+                    <circle class="mc-ring-fg" id="mcRingFg" cx="60" cy="60" r="52" />
+                </svg>
+                <div class="mc-countdown-num" id="mcCountdownNum">10</div>
+            </div>
+            <div class="mc-status" id="mcStatus">Get ready...</div>
+        </div>
+    </div>
+
+    <!-- Create Room Budget Screen (from room browser) -->
+    <div id="createRoomScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromCreateRoom">← Back</button>
+            <h2>Create Room</h2>
+            <p class="info-text" id="createRoomModeLabel">Mode: Classic</p>
+            <div class="budget-grid">
+                <button class="create-room-amount-btn" data-amount="5">$5</button>
+                <button class="create-room-amount-btn" data-amount="10">$10</button>
+                <button class="create-room-amount-btn" data-amount="20">$20</button>
+                <button class="create-room-amount-btn" data-amount="40">$40</button>
+                <button class="create-room-amount-btn" data-amount="100">$100</button>
+            </div>
+            <p class="info-text">Winner receives 95% of total pot (5% platform fee)</p>
+            <button class="btn btn-primary" id="confirmCreateRoomBtn" disabled>Create Room</button>
+        </div>
+    </div>
+
+    <!-- Deposit Screen -->
+    <div id="depositScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromDeposit">← Back</button>
+            <h2>Deposit USDT</h2>
+
+            <div class="deposit-info">
+                <p class="info-text">3% deposit fee applies</p>
+                <div class="wallet-address">
+                    <p>Send USDT (TON) to:</p>
+                    <div class="address-box" id="depositAddress">
+                        Loading address...
+                    </div>
+                    <button class="btn btn-small" id="copyAddressBtn">Copy Address</button>
+                </div>
+
+                <div class="deposit-amount">
+                    <label>Amount (USDT):</label>
+                    <input type="number" id="depositAmountInput" placeholder="0.00" min="1" step="0.01">
+                </div>
+
+                <button class="btn btn-primary" id="confirmDepositBtn">
+                    Confirm Deposit
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Game Screen -->
+    <div id="createGameScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromCreate">← Back</button>
+            <h2>Create Game</h2>
+
+            <!-- Game Mode Selection -->
+            <div class="game-mode-selection" id="gameModeSelection">
+                <div class="form-group">
+                    <label>Select Game Mode:</label>
+                    <div class="mode-grid">
+                        <button class="mode-btn" data-mode="classic">
+                            <div class="mode-icon">⚡</div>
+                            <div class="mode-name">Classic</div>
+                            <div class="mode-desc">Traditional paddle ball gameplay</div>
+                        </button>
+                        <button class="mode-btn" data-mode="chaotic">
+                            <div class="mode-icon">🎲</div>
+                            <div class="mode-name">Chaotic</div>
+                            <div class="mode-desc">Random freezes & speed changes!</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bet Amount Selection (hidden initially) -->
+            <div class="create-game-form" id="betAmountSelection" style="display: none;">
+                <div class="form-group">
+                    <label>Selected Mode: <span id="selectedModeDisplay" class="mode-badge">Classic</span></label>
+                    <label>Select Bet Amount (USDT):</label>
+                    <div class="bet-amount-grid">
+                        <button class="bet-btn" data-amount="5">$5</button>
+                        <button class="bet-btn" data-amount="10">$10</button>
+                        <button class="bet-btn" data-amount="20">$20</button>
+                        <button class="bet-btn" data-amount="40">$40</button>
+                        <button class="bet-btn" data-amount="100">$100</button>
+                    </div>
+                    <p class="info-text">Winner receives 95% of total pot (5% platform fee)</p>
+                </div>
+
+                <button class="btn btn-primary" id="confirmCreateBtn" disabled>
+                    Create Game Room
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Waiting Room Screen -->
+    <div id="waitingRoomScreen" class="screen">
+        <div class="container">
+            <h2>Waiting for Opponent</h2>
+
+            <div class="waiting-room-content">
+                <div class="waiting-animation">
+                    <div class="pulse-circle"></div>
+                    <p class="waiting-text">Looking for opponent...</p>
+                </div>
+
+                <div class="game-info-box">
+                    <p>Bet Amount: <strong>$<span id="waitingBetAmount">0</span></strong></p>
+                    <p>Match ID: <strong><span id="waitingMatchId">---</span></strong></p>
+                </div>
+
+                <div class="countdown-timer" id="waitingCountdown">
+                    <p>Game starts in: <span id="countdownSeconds">10</span>s</p>
+                </div>
+
+                <button class="btn btn-secondary" id="inviteFriendBtn">
+                    👥 Invite Friend
+                </button>
+
+                <button class="btn btn-cancel" id="cancelWaitingBtn">
+                    Cancel & Go Back
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Game Screen -->
+    <div id="joinGameScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromJoin">← Back</button>
+            <h2>Available Games</h2>
+
+            <div class="filter-options">
+                <label>Filter by amount:</label>
+                <select id="filterAmount">
+                    <option value="all">All Amounts</option>
+                    <option value="low">$1 - $10</option>
+                    <option value="medium">$10 - $50</option>
+                    <option value="high">$50+</option>
+                </select>
+            </div>
+
+            <div id="gamesList" class="games-list">
+                <!-- Games will be populated here -->
+                <div class="no-games">
+                    <p>No games available. Create one!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+        <div class="game-container">
+            <!-- Game Info Bar -->
+            <div class="game-info-bar">
+                <div class="game-player">
+                    <span id="player1Name">Player 1</span>
+                    <span class="score" id="player1Score">0</span>
+                </div>
+                <div class="game-round">
+                    <div>Round <span id="currentRound">1</span> of 3</div>
+                    <div class="game-timer">⏱️ <span id="gameTimer">40s</span></div>
+                </div>
+                <div class="game-player">
+                    <span class="score" id="player2Score">0</span>
+                    <span id="player2Name">Player 2</span>
+                </div>
+            </div>
+
+            <!-- Game Canvas -->
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- Game Status -->
+            <div class="game-status" id="gameStatus">
+                Loading game...
+            </div>
+
+            <!-- Race Countdown Overlay (5-second NFS style) -->
+            <div class="race-overlay" id="raceOverlay">
+                <div class="race-label" id="raceLabel">GET READY</div>
+                <div class="race-number" id="raceNumber">5</div>
+            </div>
+
+            <!-- Frozen Indicator (Chaotic Mode) -->
+            <div class="frozen-indicator" id="frozenIndicator">
+                <div class="frozen-icon">❄️</div>
+                <div class="frozen-text">FROZEN!</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="resultScreen" class="screen">
+        <div class="container">
+            <div class="result-content">
+                <h2 id="resultTitle">You Won!</h2>
+                <div class="result-amount">
+                    <span class="amount-won" id="amountWon">+19.00</span>
+                    <span class="currency">USDT</span>
+                </div>
+                <div class="result-details">
+                    <p>Final Score: <span id="finalScore">3-1</span></p>
+                    <p>Match ID: <span id="resultMatchId">---</span></p>
+                    <p>New Balance: <span id="newBalance">19.00</span> USDT</p>
+                    <p class="elo-change-row" id="eloChangeRow" style="display:none;">
+                        ELO: <span id="eloChangeText"></span> → <span id="eloNewText"></span>
+                    </p>
+                </div>
+
+                <div class="rematch-section" id="rematchSection">
+                    <button class="btn btn-primary" id="rematchBtn">
+                        🔄 Rematch (<span id="rematchCountdown">10</span>s)
+                    </button>
+                    <p class="info-text">Challenge same opponent</p>
+                </div>
+
+                <button class="btn btn-secondary" id="backToMenuBtn">
+                    Back to Menu
+                </button>
+
+                <button class="btn btn-tertiary" id="reportMatchBtn">
+                    🚩 Report Issue
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdraw Screen -->
+    <div id="withdrawScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromWithdraw">← Back</button>
+            <h2>Withdraw USDT</h2>
+
+            <div class="withdraw-form">
+                <div class="form-group">
+                    <label>Your Wallet Address (TON):</label>
+                    <input type="text" id="withdrawAddress" placeholder="Enter TON address">
+                </div>
+
+                <div class="form-group">
+                    <label>Amount (USDT):</label>
+                    <input type="number" id="withdrawAmount" placeholder="0.00" min="1" step="0.01">
+                    <p class="info-text">Available: <span id="availableBalance">0.00</span> USDT</p>
+                </div>
+
+                <button class="btn btn-primary" id="confirmWithdrawBtn">
+                    Withdraw
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Support/Report Screen -->
+    <div id="supportScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromSupport">← Back</button>
+            <h2>Support & Report</h2>
+
+            <div class="support-content">
+                <div class="form-group">
+                    <label>Match ID (optional):</label>
+                    <input type="text" id="reportMatchId" placeholder="Enter Match ID">
+                </div>
+
+                <div class="form-group">
+                    <label>What happened? Describe the issue:</label>
+                    <textarea id="reportDescription" rows="5" placeholder="Describe the problem..."></textarea>
+                </div>
+
+                <button class="btn btn-primary" id="submitReportBtn">
+                    Submit Report
+                </button>
+
+                <div class="support-info">
+                    <p class="info-text">We'll review your report within 24 hours</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customization Screen -->
+    <div id="customizationScreen" class="screen">
+        <!-- Sticky header with back navigation -->
+        <div class="customization-header">
+            <button class="back-btn" id="backFromCustomization">← Back</button>
+            <h2>Paddle Skins</h2>
+        </div>
+
+        <!-- Scrollable content -->
+        <div class="customization-body">
+            <p class="info-text">Unlock paddle skins by wagering in matches!</p>
+
+            <!-- Basic Skin - centered, own row -->
+            <div class="basic-skin-row">
+                <div class="paddle-skin-card basic-card" data-skin="default" id="basicSkinCard">
+                    <canvas class="paddle-preview-canvas" id="basicPreview" width="200" height="100"></canvas>
+                    <div class="skin-name">Basic</div>
+                    <div class="skin-price" style="color: rgba(255,255,255,0.4);">Free</div>
+                    <div class="skin-actions">
+                        <button class="btn btn-small skin-equip-btn" id="equipBasic">Equip</button>
+                        <button class="btn btn-small skin-try-btn" id="tryBasic">Try</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2x2 Grid: Frost, Void, Sakura, Solar -->
+            <div class="paddle-skins-grid">
+                <!-- Frost Paddle - PURCHASE $10 -->
+                <div class="paddle-skin-card" data-skin="frost" id="frostSkinCard">
+                    <canvas class="paddle-preview-canvas" id="frostPreview" width="200" height="100"></canvas>
+                    <div class="skin-name">Frost</div>
+                    <div class="skin-price">$10 USDT</div>
+                    <div class="skin-actions">
+                        <button class="btn btn-small skin-purchase-btn" id="purchaseFrost">Buy $10</button>
+                        <button class="btn btn-small skin-equip-btn" id="equipFrost" style="display:none;">Equip</button>
+                        <button class="btn btn-small skin-try-btn" id="tryFrost">Try</button>
+                    </div>
+                </div>
+
+                <!-- Void Paddle - PURCHASE $50 -->
+                <div class="paddle-skin-card" data-skin="void" id="voidSkinCard">
+                    <canvas class="paddle-preview-canvas" id="voidPreview" width="200" height="100"></canvas>
+                    <div class="skin-name">Void</div>
+                    <div class="skin-price">$50 USDT</div>
+                    <div class="skin-actions">
+                        <button class="btn btn-small skin-purchase-btn" id="purchaseVoid">Buy $50</button>
+                        <button class="btn btn-small skin-equip-btn" id="equipVoid" style="display:none;">Equip</button>
+                        <button class="btn btn-small skin-try-btn" id="tryVoid">Try</button>
+                    </div>
+                </div>
+
+                <!-- Sakura Paddle - UNLOCK BY WAGERING $100 -->
+                <div class="paddle-skin-card" data-skin="sakura" id="sakuraSkinCard">
+                    <canvas class="paddle-preview-canvas" id="sakuraPreview" width="200" height="100"></canvas>
+                    <div class="skin-name">Sakura</div>
+                    <div class="skin-requirement">Wager: $<span id="sakuraProgress">0</span> / $100</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="sakuraProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="skin-actions">
+                        <button class="btn btn-small skin-equip-btn" id="equipSakura" disabled>Locked</button>
+                        <button class="btn btn-small skin-try-btn" id="trySakura">Try</button>
+                    </div>
+                </div>
+
+                <!-- Solar Paddle - UNLOCK BY WAGERING $500 -->
+                <div class="paddle-skin-card" data-skin="solar" id="solarSkinCard">
+                    <canvas class="paddle-preview-canvas" id="solarPreview" width="200" height="100"></canvas>
+                    <div class="skin-name">Solar</div>
+                    <div class="skin-requirement">Wager: $<span id="solarProgress">0</span> / $500</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="solarProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="skin-actions">
+                        <button class="btn btn-small skin-equip-btn" id="equipSolar" disabled>Locked</button>
+                        <button class="btn btn-small skin-try-btn" id="trySolar">Try</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Screen -->
+    <div id="statsScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromStats">← Back</button>
+            <h2>Your Statistics</h2>
+
+            <div class="stats-content">
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-value" id="statWins">0</div>
+                    <div class="stat-label">Wins</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">💔</div>
+                    <div class="stat-value" id="statLosses">0</div>
+                    <div class="stat-label">Losses</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-value" id="statStreak">0</div>
+                    <div class="stat-label">Best Streak</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="statEarnings">$0.00</div>
+                    <div class="stat-label">Total Earnings</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🎲</div>
+                    <div class="stat-value" id="statWagered">$0.00</div>
+                    <div class="stat-label">Total Wagered</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="statWinRate">0%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Screen -->
+    <div id="leaderboardScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromLeaderboard">← Back</button>
+            <h2>Global Leaderboard</h2>
+
+            <div class="leaderboard-content">
+                <div class="leaderboard-tabs">
+                    <button class="tab-btn active" data-tab="earnings">Top Earnings</button>
+                    <button class="tab-btn" data-tab="wins">Most Wins</button>
+                    <button class="tab-btn" data-tab="elo">ELO Rating</button>
+                </div>
+
+                <div id="leaderboardList" class="leaderboard-list">
+                    <!-- Populated by JavaScript -->
+                    <div class="no-data">No leaderboard data yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel Screen (hidden by default) -->
+    <div id="adminScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromAdmin">← Back</button>
+            <h2>Admin Panel</h2>
+
+            <div class="admin-tabs">
+                <button class="tab-btn active" data-tab="watchlist">Watchlist</button>
+                <button class="tab-btn" data-tab="bans">Bans</button>
+                <button class="tab-btn" data-tab="reports">Reports</button>
+            </div>
+
+            <!-- Watchlist Tab -->
+            <div id="watchlistTab" class="admin-tab active">
+                <div class="admin-section">
+                    <h3>Suspicious Activity</h3>
+                    <div id="watchlistContent" class="admin-list">
+                        <p class="info-text">No suspicious activity detected</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bans Tab -->
+            <div id="bansTab" class="admin-tab">
+                <div class="admin-section">
+                    <h3>Ban User</h3>
+                    <div class="form-group">
+                        <label>Telegram ID or IP:</label>
+                        <input type="text" id="banIdentifier" placeholder="Enter ID or IP">
+                    </div>
+                    <div class="form-group">
+                        <label>Reason:</label>
+                        <input type="text" id="banReason" placeholder="Cheating, abuse, etc.">
+                    </div>
+                    <button class="btn btn-danger" id="confirmBanBtn">Ban User</button>
+
+                    <h3 style="margin-top: 30px;">Active Bans</h3>
+                    <div id="bansListContent" class="admin-list">
+                        <p class="info-text">No active bans</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" class="admin-tab">
+                <div class="admin-section">
+                    <h3>User Reports</h3>
+                    <div id="reportsListContent" class="admin-list">
+                        <p class="info-text">No reports</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Match History Screen -->
+    <div id="matchHistoryScreen" class="screen">
+        <div class="container">
+            <button class="back-btn" id="backFromMatchHistory">← Back</button>
+            <h2>Match History</h2>
+            <div id="matchHistoryList" class="mh-list">
+                <div class="no-data">No matches played yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confetti canvas (hidden until win) -->
+    <canvas id="confettiCanvas" style="display:none;"></canvas>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+    <script src="ui.js"></script>
+    <script src="wallet.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
