@@ -2010,43 +2010,79 @@ window.clearGraceCountdown = function() {
     if (el) el.remove();
 };
 
-// ── Global Chat ───────────────────────────────────────────────────────────────
-document.getElementById('globalChatBtn').addEventListener('click', () => {
-    closeSlideMenu();
-    hapticFeedback('light');
-    const wagered = AppState.user.totalWagered || 0;
-    const chatLocked   = document.getElementById('chatLocked');
-    const chatUnlocked = document.getElementById('chatUnlocked');
-    if (wagered >= 15) {
-        if (chatLocked)   chatLocked.style.display   = 'none';
-        if (chatUnlocked) chatUnlocked.style.display = 'flex';
-        sendToServer({ type: 'getChat' });
-    } else {
-        if (chatLocked)   chatLocked.style.display   = 'block';
-        if (chatUnlocked) chatUnlocked.style.display = 'none';
-        const prog = document.getElementById('chatWagerProgress');
-        if (prog) prog.textContent = `Progress: $${wagered.toFixed(2)} / $15.00`;
+// ── Floating Chat Widget ──────────────────────────────────────────────────────
+(function initChatWidget() {
+    const bubbleBtn = document.getElementById('chatBubbleBtn');
+    const chatPanel = document.getElementById('chatPanel');
+    const closeBtn  = document.getElementById('closeChatPanel');
+    const sendBtn   = document.getElementById('chatSendBtn');
+    const input     = document.getElementById('chatInput');
+    const badge     = document.getElementById('chatUnreadBadge');
+    if (!bubbleBtn || !chatPanel) return;
+
+    let panelOpen = false;
+
+    function openChat() {
+        chatPanel.style.display = 'flex';
+        panelOpen = true;
+        window._chatUnreadCount = 0;
+        if (badge) badge.style.display = 'none';
+        if (!window._chatHistoryLoaded) {
+            sendToServer({ type: 'getChat' });
+            window._chatHistoryLoaded = true;
+        }
+        const msgs = document.getElementById('chatMessages');
+        if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+        if (input) input.focus();
     }
-    showScreen('globalChatScreen');
-});
 
-document.getElementById('backFromChat').addEventListener('click', () => {
-    hapticFeedback('light');
-    showScreen('mainMenu');
-});
+    function closeChat() {
+        chatPanel.style.display = 'none';
+        panelOpen = false;
+    }
 
-document.getElementById('chatSendBtn').addEventListener('click', () => {
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
-    if (!text) return;
-    sendToServer({ type: 'chatMessage', text });
-    input.value = '';
-    input.focus();
-});
+    bubbleBtn.addEventListener('click', () => {
+        hapticFeedback('light');
+        if (panelOpen) closeChat(); else openChat();
+    });
 
-document.getElementById('chatInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('chatSendBtn').click();
-});
+    if (closeBtn) closeBtn.addEventListener('click', () => {
+        hapticFeedback('light');
+        closeChat();
+    });
+
+    sendBtn.addEventListener('click', () => {
+        const text = input.value.trim();
+        if (!text) return;
+        sendToServer({ type: 'chatMessage', text });
+        input.value = '';
+        input.focus();
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendBtn.click();
+    });
+
+    // Hide the widget during active gameplay so it doesn't block the canvas
+    const gameScreenEl = document.getElementById('gameScreen');
+    if (gameScreenEl) {
+        const obs = new MutationObserver(() => {
+            const widget = document.getElementById('chatWidget');
+            if (widget) widget.style.display = gameScreenEl.classList.contains('active') ? 'none' : '';
+        });
+        obs.observe(gameScreenEl, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    // Expose helpers for app.js to trigger unread badge
+    window._chatPanelIsOpen = () => panelOpen;
+    window._chatShowUnread  = () => {
+        window._chatUnreadCount = (window._chatUnreadCount || 0) + 1;
+        if (badge) {
+            badge.textContent    = window._chatUnreadCount > 9 ? '9+' : String(window._chatUnreadCount);
+            badge.style.display  = 'flex';
+        }
+    };
+})();
 
 // ── Gift Modal ─────────────────────────────────────────────────────────────────
 window.openGiftModal = function(recipientName) {

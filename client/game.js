@@ -1579,7 +1579,7 @@ function endMultiplayerGame() {
 
     // Show "my rounds - opp rounds" score
     finalScore.textContent = myWins + '-' + oppWins + (isTie ? ' (Draw)' : '');
-    document.getElementById('resultMatchId').textContent = Game.gameId;
+    if (typeof window.setResultMatchId === 'function') window.setResultMatchId(Game.gameId || '');
     newBalance.textContent = AppState.user.balance.toFixed(2);
 
     // Hide rematch button for multiplayer (no rematch flow yet)
@@ -1667,7 +1667,7 @@ function endAIGame() {
 
     finalScore.textContent = Game.roundWins.player1 + '-' + Game.roundWins.player2 +
         (isTie ? ' (Draw)' : '');
-    document.getElementById('resultMatchId').textContent = Game.gameId;
+    if (typeof window.setResultMatchId === 'function') window.setResultMatchId(Game.gameId || '');
     newBalance.textContent = AppState.user.balance.toFixed(2);
 
     // Show rematch button for AI games
@@ -3055,7 +3055,30 @@ function onGameOver(data) {
         finalScore.textContent = myScore + '-' + oppScore;
     }
     if (newBalanceEl && data.newBalance !== undefined) newBalanceEl.textContent = data.newBalance.toFixed(2);
-    document.getElementById('resultMatchId').textContent = data.matchId || Game.gameId || '';
+    if (typeof window.setResultMatchId === 'function') window.setResultMatchId(data.matchId || Game.gameId || '');
+
+    // Tappable opponent name under result title
+    const opponentName = Game.isPlayer1
+        ? (AppState.currentGame && AppState.currentGame.player2Name)
+        : (AppState.currentGame && AppState.currentGame.player1Name);
+    const opEl = document.getElementById('resultOpponent');
+    if (opEl && opponentName) {
+        opEl.style.display = 'block';
+        opEl.innerHTML = `vs <span style="color:#4fd1c5;cursor:pointer;text-decoration:underline;" onclick="openProfile('${opponentName}')">${opponentName}</span>`;
+    }
+
+    // Emoji reactions — reset and show
+    const emojiSection = document.getElementById('emojiSection');
+    if (emojiSection) {
+        emojiSection.style.display = 'block';
+        document.querySelectorAll('.emoji-btn').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    }
+    const emojiRecv = document.getElementById('emojiReceived');
+    if (emojiRecv) emojiRecv.style.display = 'none';
+
+    // Reset fairness result from previous match
+    const fairEl = document.getElementById('fairnessResult');
+    if (fairEl) fairEl.style.display = 'none';
 
     // ELO change display
     const eloRow = document.getElementById('eloChangeRow');

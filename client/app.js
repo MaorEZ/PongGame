@@ -592,16 +592,24 @@ function appendChatMessage(msg) {
         : `<span style="cursor:pointer;color:#4fd1c5;text-decoration:underline;" onclick="openProfile('${safeName}')">${safeName}</span>`;
     div.innerHTML = `
         <div style="font-size:10px; color:#888; margin-bottom:2px; text-align:${isMe ? 'right' : 'left'};">${nameHtml}</div>
-        <div style="background:${isMe ? 'rgba(79,209,197,0.18)' : 'rgba(255,255,255,0.08)'}; border-radius:10px; padding:8px 12px; font-size:14px; color:#e2e8f0; word-break:break-word;">${safeText}</div>
+        <div style="background:${isMe ? 'rgba(79,209,197,0.18)' : 'rgba(255,255,255,0.08)'}; border-radius:10px; padding:8px 12px; font-size:13px; color:#e2e8f0; word-break:break-word;">${safeText}</div>
     `;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
+    // Unread badge when panel is closed and message is from someone else
+    if (!isMe && typeof window._chatPanelIsOpen === 'function' && !window._chatPanelIsOpen()) {
+        if (typeof window._chatShowUnread === 'function') window._chatShowUnread();
+    }
 }
 
 function renderChatHistory(messages) {
     const el = document.getElementById('chatMessages');
     if (!el) return;
     el.innerHTML = '';
+    if (!messages || messages.length === 0) {
+        el.innerHTML = '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">No messages yet — say something!</div>';
+        return;
+    }
     messages.forEach(msg => appendChatMessage(msg));
 }
 
