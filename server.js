@@ -501,7 +501,7 @@ function handleRegister(socketId, ws, data) {
         Database.referralCodes.set(refCode, userId);
         Database.users.set(userId, {
             name: userName,
-            balance: 0,
+            balance: 100,
             socketId: socketId,
             wins: 0,
             losses: 0,
