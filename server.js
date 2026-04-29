@@ -24,7 +24,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ELO_START          = 1000; // starting rating for all new players
 const ELO_K              = 32;   // standard K-factor
 const NEW_ACCOUNT_MATCHES = 10;  // matches before stake limit lifts
-const NEW_ACCOUNT_MAX_BET = 2;   // max bet (USDT) during new-account period
+const NEW_ACCOUNT_MAX_BET = 5;   // max bet (USDT) during new-account period
 
 // Verify Telegram initData hash — prevents userId spoofing from bots/scripts
 function verifyTelegramInitData(initData) {
@@ -742,15 +742,13 @@ function handleCreateGame(socketId, ws, data) {
     }));
 }
 
-// Get available games (filtered by mode + budget)
+// Get available games (filtered by budget only — mode filter removed so all rooms are visible)
 function handleGetGames(socketId, ws, data) {
-    const gameMode = data.gameMode || 'classic';
     const maxBudget = parseFloat(data.maxBudget) || 9999;
     const availableRooms = [];
 
     Database.games.forEach(game => {
         if (game.status === 'waiting' &&
-            (!game.gameMode || game.gameMode === gameMode) &&
             game.betAmount <= maxBudget) {
             availableRooms.push({
                 id: game.id,
