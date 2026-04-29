@@ -736,41 +736,271 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 .mode-desc, .play-mode-desc { font-family: var(--mono-f) !important; color: var(--mute) !important; font-size: 10px !important; }
 .play-mode-name { font-family: var(--disp-f) !important; font-weight: 800 !important; }
 
-/* ── ROOM BROWSER ─────────────────────────────────────────────── */
-#roomBrowserScreen { background: var(--bone) !important; }
-.rb-toolbar {
+/* ── ROOM BROWSER / STAKEROOM ─────────────────────────────────── */
+#roomBrowserScreen {
   background: var(--bone) !important;
-  border-bottom: 1.5px solid var(--ink) !important;
-  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
-.rb-toolbar-title { color: var(--ink) !important; font-family: var(--disp-f) !important; font-weight: 800 !important; }
-.rb-back { color: var(--ink) !important; background: none !important; border: none !important; }
-.rb-pill {
-  background: var(--ink) !important; color: var(--bone) !important;
-  border-radius: 0 !important; font-family: var(--mono-f) !important;
-  font-size: 10px !important; font-weight: 700 !important; letter-spacing: 0.06em !important;
+
+/* back bar */
+.rb-backbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1.5px solid var(--ink);
 }
-.rb-list { background: var(--bone) !important; }
-.rb-room-card {
+.rb-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono-f);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 0;
+}
+.rb-back-btn:active { opacity: 0.6; }
+.rb-screen-title {
+  font-family: var(--mono-f);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* section wrapper */
+.rb-section {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid rgba(10,10,10,0.08);
+  flex-shrink: 0;
+}
+.rb-section-label {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mute);
+  margin-bottom: 8px;
+}
+
+/* mode grid */
+.rb-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.rb-mode-btn {
+  padding: 11px 12px;
+  border: 1.5px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.08s;
+}
+.rb-mode-btn.selected {
+  background: var(--ink);
+  color: var(--bone);
+  box-shadow: 4px 4px 0 var(--red);
+}
+.rb-mode-name {
+  font-family: var(--disp-f);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+.rb-mode-desc {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  margin-top: 3px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* stake row */
+.rb-stake-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.rb-win-preview {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  color: var(--mute);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rb-stake-row {
+  display: flex;
+  gap: 4px;
+}
+.rb-stake-btn {
+  flex: 1;
+  padding: 10px 0;
+  border: 1.5px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+  font-family: var(--mono-f);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.08s;
+}
+.rb-stake-btn.selected {
+  background: var(--red);
+  color: var(--bone);
+  border-color: var(--ink);
+}
+.rb-stake-btn:active { transform: translate(1px,1px); }
+
+/* rooms header */
+.rb-rooms-header {
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+}
+
+/* room list scroll area */
+.rb-my-room, .rb-list {
   background: var(--bone) !important;
-  border: 1.5px solid var(--ink) !important;
-  border-radius: 0 !important; box-shadow: none !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
-.rb-room-card:active { transform: translate(1px,1px) !important; }
-.rb-room-host { font-family: var(--disp-f) !important; font-weight: 700 !important; color: var(--ink) !important; }
-.rb-room-stake { font-family: var(--disp-f) !important; font-weight: 800 !important; color: var(--red) !important; }
-.rb-room-meta { font-family: var(--mono-f) !important; color: var(--mute) !important; font-size: 10px !important; }
-.rb-room-join { font-family: var(--mono-f) !important; color: var(--mute) !important; font-size: 9px !important; }
-.rb-own-room { border: 1.5px solid var(--red) !important; border-radius: 0 !important; }
-.rb-bottom { background: var(--bone) !important; border-top: 1.5px solid var(--ink) !important; }
+.rb-list { flex: 1; padding: 0 16px; }
+.rb-my-room { padding: 0 16px; }
+
+/* room cards (built by JS) */
+.rb-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: var(--bone);
+  border: 1.5px solid var(--ink);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  position: relative;
+}
+.rb-card:active { transform: translate(1px,1px); }
+.rb-card.own-room { border-color: var(--red); }
+
+.rb-avatar {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--disp-f);
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+  border-radius: 0;
+}
+.rb-card-info { flex: 1; min-width: 0; }
+.rb-card-name {
+  font-family: var(--disp-f);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rb-card-meta {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  color: var(--mute);
+  margin-top: 3px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rb-card-amount {
+  font-family: var(--disp-f);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--red);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.rb-join {
+  display: block;
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: right;
+}
+.rb-my-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.rb-status {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--acid);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--ink);
+  padding: 2px 6px;
+}
+.rb-cancel {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--red);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: none;
+  border: 1px solid var(--red);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+/* bottom create bar */
+.rb-bottom {
+  background: var(--bone) !important;
+  border-top: 1.5px solid var(--ink) !important;
+  padding: 10px 16px 14px !important;
+  flex-shrink: 0;
+}
 .rb-create-btn {
-  background: var(--ink) !important; color: var(--bone) !important;
-  border: none !important; border-radius: 0 !important;
-  font-family: var(--mono-f) !important; font-weight: 700 !important;
-  letter-spacing: 0.08em !important; text-transform: uppercase !important;
-  box-shadow: none !important;
+  display: block;
+  width: 100%;
+  padding: 15px;
+  background: var(--ink) !important;
+  color: var(--bone) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  font-family: var(--mono-f) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  cursor: pointer;
 }
-.rb-create-btn:active { transform: translate(1px,1px) !important; }
+.rb-create-btn:active { transform: translate(2px,2px) !important; }
 
 /* ── MATCH COUNTDOWN ──────────────────────────────────────────── */
 #matchCountdownScreen { background: var(--ink) !important; color: var(--bone) !important; }

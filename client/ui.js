@@ -84,10 +84,16 @@ function closeSlideMenu() {
     hapticFeedback('light');
 }
 
-// === 2x2 Main Menu Grid Handlers ===
+// === Main Menu Game Handlers ===
 document.getElementById('playSquare').addEventListener('click', () => {
     hapticFeedback('medium');
-    showScreen('playModeScreen');
+    selectedGameMode = selectedGameMode || 'classic';
+    selectedBudget = selectedBudget || 10;
+    selectedBetAmount = selectedBudget;
+    syncRoomBrowserUI();
+    showScreen('roomBrowserScreen');
+    requestRoomList();
+    startRoomPolling();
 });
 
 document.getElementById('practiceSquare').addEventListener('click', () => {
@@ -116,6 +122,43 @@ document.getElementById('playAIBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
     startAIGame();
+});
+
+// === Inline Room Browser controls (mode toggle + stake row) ===
+
+function syncRoomBrowserUI() {
+    const mode = selectedGameMode || 'classic';
+    const stake = selectedBudget || 10;
+
+    document.querySelectorAll('.rb-mode-btn').forEach(b => {
+        b.classList.toggle('selected', b.dataset.mode === mode);
+    });
+    document.querySelectorAll('.rb-stake-btn').forEach(b => {
+        b.classList.toggle('selected', parseInt(b.dataset.stake) === stake);
+    });
+    const createBtn = document.getElementById('createRoomBtn');
+    if (createBtn) createBtn.textContent = '+ CREATE ROOM AT $' + stake;
+    const winEl = document.getElementById('rbWinPreview');
+    if (winEl) winEl.innerHTML = 'WIN <span style="color:var(--red);font-weight:700">$' + Math.round(stake * 1.9) + '</span>';
+}
+
+document.querySelectorAll('.rb-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        hapticFeedback('light');
+        selectedGameMode = btn.dataset.mode;
+        syncRoomBrowserUI();
+        requestRoomList();
+    });
+});
+
+document.querySelectorAll('.rb-stake-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        hapticFeedback('light');
+        selectedBudget = parseInt(btn.dataset.stake);
+        selectedBetAmount = selectedBudget;
+        syncRoomBrowserUI();
+        requestRoomList();
+    });
 });
 
 // === Play Flow: Mode Select → Budget → Room Browser → Create Room ===
@@ -173,7 +216,7 @@ document.getElementById('backFromBudget').addEventListener('click', () => {
 document.getElementById('backFromRoomBrowser').addEventListener('click', () => {
     hapticFeedback('light');
     stopRoomPolling();
-    showScreen('budgetScreen');
+    showScreen('mainMenu');
 });
 
 document.getElementById('backFromCreateRoom').addEventListener('click', () => {
@@ -181,19 +224,27 @@ document.getElementById('backFromCreateRoom').addEventListener('click', () => {
     showScreen('roomBrowserScreen');
 });
 
-// Create Room button (from room browser)
+// Create Room button — inline create at selected stake, no extra screen
 document.getElementById('createRoomBtn').addEventListener('click', () => {
     hapticFeedback('medium');
     if (activeRoom) {
         showNotification('You already have an active room! Cancel it first.');
         return;
     }
-    document.getElementById('createRoomModeLabel').textContent = 'Mode: ' + (selectedGameMode === 'classic' ? 'Classic' : 'Chaotic');
-    document.querySelectorAll('.create-room-amount-btn').forEach(b => b.classList.remove('selected'));
-    document.getElementById('confirmCreateRoomBtn').disabled = true;
-    selectedBetAmount = 0;
-    showScreen('createRoomScreen');
-    updateBetTierLocks();
+    const betAmt = selectedBetAmount || selectedBudget || 10;
+    if (betAmt > AppState.user.balance) {
+        showNotification('Insufficient balance!');
+        hapticFeedback('error');
+        return;
+    }
+    const mode = selectedGameMode || 'classic';
+    const roomId = 'R' + Date.now().toString(36);
+    activeRoom = { id: roomId, mode, amount: betAmt, playerName: AppState.user.name };
+    updateBalance(AppState.user.balance - betAmt);
+    sendToServer({ type: 'createGame', userId: AppState.user.id, betAmount: betAmt, gameMode: mode, roomId });
+    requestRoomList();
+    updateRoomBrowser([{ id: roomId, playerName: AppState.user.name, mode, amount: betAmt, playerId: AppState.user.id, isSelf: true }]);
+    showNotification('Room created! Waiting for opponent...');
 });
 
 // Create Room amount selection

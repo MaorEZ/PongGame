@@ -370,26 +370,61 @@
         </div>
     </div>
 
-    <!-- Room Browser Screen -->
+    <!-- Room Browser / StakeRoom Screen -->
     <div id="roomBrowserScreen" class="screen">
-        <!-- Toolbar -->
-        <div class="rb-toolbar">
-            <button class="rb-back" id="backFromRoomBrowser">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <div class="rb-toolbar-title">Rooms</div>
-            <div class="rb-toolbar-pills">
-                <span class="rb-pill rb-pill-mode" id="roomModeBadge">Classic</span>
-                <span class="rb-pill rb-pill-budget" id="roomBudgetBadge">$10</span>
+        <!-- Status bar -->
+        <div class="gam-status-bar">
+            <span>ARENA / FIND MATCH</span>
+            <span id="rbOpenCount" style="color:var(--red);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em">● 0 OPEN</span>
+        </div>
+
+        <!-- Back bar -->
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromRoomBrowser">← BACK</button>
+            <span class="rb-screen-title">PADDLE BALL</span>
+            <span style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-transform:uppercase">1V1</span>
+        </div>
+
+        <!-- Mode toggle -->
+        <div class="rb-section">
+            <div class="rb-section-label">▸ MODE</div>
+            <div class="rb-mode-grid">
+                <button class="rb-mode-btn selected" data-mode="classic">
+                    <div class="rb-mode-name">CLASSIC</div>
+                    <div class="rb-mode-desc">pure skill</div>
+                </button>
+                <button class="rb-mode-btn" data-mode="chaotic">
+                    <div class="rb-mode-name">CHAOTIC</div>
+                    <div class="rb-mode-desc">power-ups</div>
+                </button>
             </div>
         </div>
-        <!-- Pinned own room -->
+
+        <!-- Stake row -->
+        <div class="rb-section">
+            <div class="rb-stake-header">
+                <div class="rb-section-label">▸ STAKE</div>
+                <div class="rb-win-preview" id="rbWinPreview">WIN <span style="color:var(--red);font-weight:700">$19</span></div>
+            </div>
+            <div class="rb-stake-row">
+                <button class="rb-stake-btn" data-stake="5">$5</button>
+                <button class="rb-stake-btn selected" data-stake="10">$10</button>
+                <button class="rb-stake-btn" data-stake="20">$20</button>
+                <button class="rb-stake-btn" data-stake="40">$40</button>
+                <button class="rb-stake-btn" data-stake="100">$100</button>
+            </div>
+        </div>
+
+        <!-- Room list -->
+        <div class="rb-rooms-header">
+            <div class="rb-section-label" id="rbRoomsLabel">▸ OPEN ROOMS · 0</div>
+        </div>
         <div id="myRoomSlot" class="rb-my-room"></div>
-        <!-- Scrollable room list -->
         <div id="roomList" class="rb-list"></div>
-        <!-- Bottom action -->
+
+        <!-- Sticky create -->
         <div class="rb-bottom">
-            <button class="rb-create-btn" id="createRoomBtn">+ Create Room</button>
+            <button class="rb-create-btn" id="createRoomBtn">+ CREATE ROOM AT $10</button>
         </div>
     </div>
 
