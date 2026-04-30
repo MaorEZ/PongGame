@@ -125,7 +125,6 @@ body::before, body::after { display: none !important; }
 /* ── MAIN MENU LAYOUT ────────────────────────────────────────── */
 #mainMenu {
   background: var(--bone) !important;
-  display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
   justify-content: flex-start !important;
@@ -133,6 +132,9 @@ body::before, body::after { display: none !important; }
   overflow: hidden !important;
   height: 100vh !important;
   min-height: unset !important;
+}
+#mainMenu.active {
+  display: flex !important;
 }
 #menuBgCanvas { display: none !important; }
 .main-menu-container {
@@ -753,12 +755,14 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 /* ── ROOM BROWSER / STAKEROOM ─────────────────────────────────── */
 #roomBrowserScreen {
   background: var(--bone) !important;
-  display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
   justify-content: flex-start !important;
   padding: 0 !important;
   overflow: hidden !important;
+}
+#roomBrowserScreen.active {
+  display: flex !important;
 }
 
 /* back bar */
