@@ -21,7 +21,7 @@ function hidePracticeModal() {
 // Global state for selected bet amount and game mode
 let selectedBetAmount = 0;
 let selectedGameMode = 'classic'; // 'classic' or 'chaotic'
-let selectedBudget = 0; // Budget filter for room browser
+let selectedBudget = 100; // Budget filter for room browser
 let currentMatchId = null;
 let roomPollingInterval = null;
 let rematchTimer = null;
@@ -105,10 +105,10 @@ function onTap(el, handler) {
     el.addEventListener('click', () => { if (!('ontouchstart' in window)) handler(); });
 }
 
-onTap(document.getElementById('playSquare'), () => {
+document.getElementById('playSquare').addEventListener('click', () => {
     hapticFeedback('medium');
     selectedGameMode = selectedGameMode || 'classic';
-    selectedBudget = selectedBudget || 10;
+    selectedBudget = selectedBudget || 100;
     selectedBetAmount = selectedBudget;
     syncRoomBrowserUI();
     showScreen('roomBrowserScreen');
@@ -140,7 +140,7 @@ document.getElementById('playAIBtn').addEventListener('click', () => {
     hapticFeedback('light');
     // Navigate to room browser where practice section lives
     selectedGameMode = selectedGameMode || 'classic';
-    selectedBudget   = selectedBudget   || 10;
+    selectedBudget   = selectedBudget   || 100;
     selectedBetAmount = selectedBudget;
     syncRoomBrowserUI();
     showScreen('roomBrowserScreen');
