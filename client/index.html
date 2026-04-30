@@ -115,8 +115,8 @@
                         <span class="gam-balance-label">BALANCE</span>
                         <span class="gam-balance-num" id="balanceAmount">0.00</span>
                     </div>
-                    <button class="gam-bal-btn" onclick="document.getElementById('depositBtn').click()">+</button>
-                    <button class="gam-bal-btn" style="background:var(--bone);color:var(--ink);border-left:1.5px solid var(--ink)" onclick="document.getElementById('withdrawBtn').click()">↗</button>
+                    <button class="gam-bal-btn" onclick="showScreen('depositScreen')">+</button>
+                    <button class="gam-bal-btn" style="background:var(--bone);color:var(--ink);border-left:1.5px solid var(--ink)" onclick="showScreen('withdrawScreen')">↗</button>
                 </div>
             </div>
 
@@ -333,43 +333,32 @@
         </div>
     </div>
 
-    <!-- Practice Screen -->
-    <div id="practiceScreen" class="screen">
-        <div class="gam-status-bar">
-            <span>GAM // PRACTICE</span>
-            <span style="font-family:var(--mono-f);font-size:9.5px;color:var(--mute);letter-spacing:0.1em;text-transform:uppercase">FREE · NO STAKES</span>
-        </div>
-
-        <div class="rb-backbar">
-            <button class="rb-back-btn" id="backFromPractice">← BACK</button>
-            <span class="rb-screen-title">PRACTICE</span>
-            <span style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-transform:uppercase">VS AI</span>
-        </div>
-
-        <div class="rb-section">
-            <div class="rb-section-label">▸ MODE</div>
-            <div class="rb-mode-grid">
-                <button class="rb-mode-btn practice-mode-btn selected" data-practice-mode="classic">
-                    <div class="rb-mode-name">CLASSIC</div>
-                    <div class="rb-mode-desc">pure skill</div>
-                </button>
-                <button class="rb-mode-btn practice-mode-btn" data-practice-mode="chaotic">
-                    <div class="rb-mode-name">CHAOTIC</div>
-                    <div class="rb-mode-desc">power-ups</div>
-                </button>
+    <!-- Practice Modal (bottom sheet overlay) -->
+    <div id="practiceScreen">
+        <div class="practice-panel">
+            <div class="rb-backbar">
+                <button class="rb-back-btn" id="backFromPractice">← BACK</button>
+                <span class="rb-screen-title">PRACTICE VS AI</span>
+                <span style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-transform:uppercase">FREE</span>
             </div>
-        </div>
 
-        <div style="flex:1;padding:16px">
-            <div style="border:1.5px solid var(--ink);padding:16px;background:var(--bone-2)">
-                <div style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px">▸ NO WAGER</div>
-                <div style="font-family:var(--disp-f);font-size:17px;font-weight:800;color:var(--ink)">Sharpen your game.</div>
-                <div style="font-family:var(--mono-f);font-size:10px;color:var(--mute);margin-top:6px;line-height:1.6;letter-spacing:0.04em">Play against the AI bot at full speed. No money on the line — just you getting sharp before you go live.</div>
+            <div class="rb-section">
+                <div class="rb-section-label">▸ MODE</div>
+                <div class="rb-mode-grid">
+                    <button class="rb-mode-btn practice-mode-btn selected" data-practice-mode="classic">
+                        <div class="rb-mode-name">CLASSIC</div>
+                        <div class="rb-mode-desc">pure skill</div>
+                    </button>
+                    <button class="rb-mode-btn practice-mode-btn" data-practice-mode="chaotic">
+                        <div class="rb-mode-name">CHAOTIC</div>
+                        <div class="rb-mode-desc">power-ups</div>
+                    </button>
+                </div>
             </div>
-        </div>
 
-        <div class="rb-bottom">
-            <button class="rb-create-btn" id="startPracticeBtn" style="background:var(--acid)!important;color:var(--ink)!important;letter-spacing:0.1em">START PRACTICE →</button>
+            <div class="rb-bottom">
+                <button class="rb-create-btn" id="startPracticeBtn" style="background:var(--acid)!important;color:var(--ink)!important;letter-spacing:0.1em">START PRACTICE →</button>
+            </div>
         </div>
     </div>
 

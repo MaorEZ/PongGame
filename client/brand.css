@@ -121,7 +121,9 @@ body::before, body::after { display: none !important; }
   align-items: stretch !important;
   justify-content: flex-start !important;
   padding: 0 !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  min-height: unset !important;
 }
 #menuBgCanvas { display: none !important; }
 .main-menu-container {
@@ -130,8 +132,10 @@ body::before, body::after { display: none !important; }
   align-items: stretch !important;
   max-width: 100% !important;
   padding: 0 !important;
-  min-height: 100vh !important;
+  height: 100% !important;
+  min-height: unset !important;
   width: 100% !important;
+  overflow: hidden !important;
 }
 
 /* ── STATUS BAR ──────────────────────────────────────────────── */
@@ -326,9 +330,9 @@ body::before, body::after { display: none !important; }
 /* ── GAME SCROLL AREA ────────────────────────────────────────── */
 .gam-scroll {
   flex: 1;
-  padding: 16px 14px 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px 0;
+  overflow: hidden;
+  min-height: 0;
 }
 .gam-scroll::-webkit-scrollbar { width: 0; height: 0; }
 
@@ -1106,3 +1110,47 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   box-shadow: 6px 6px 0 var(--ink) !important;
 }
 .ai-mode-content h2 { font-family: var(--disp-f) !important; color: var(--ink) !important; font-weight: 800 !important; }
+
+/* ── PRACTICE MODAL (bottom sheet) ───────────────────────────── */
+#practiceScreen {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(10,10,10,0.75) !important;
+  padding: 0 !important;
+  min-height: unset !important;
+  height: 100% !important;
+  z-index: 600 !important;
+  display: none;
+}
+#practiceScreen.open {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: stretch !important;
+}
+.practice-panel {
+  background: var(--bone) !important;
+  border-top: 1.5px solid var(--ink) !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* ── GAME SCREEN — full-viewport, no scroll ───────────────────── */
+#gameScreen {
+  padding: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: unset !important;
+  overflow: hidden !important;
+}
+#gameScreen.active {
+  display: block !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+}
+#gameScreen .game-container {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
