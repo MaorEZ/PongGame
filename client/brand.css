@@ -1263,7 +1263,278 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 .pulse-circle { border-color: var(--red) !important; border-top-color: transparent !important; }
 .countdown-timer { font-family: var(--mono-f) !important; color: var(--mute) !important; }
 
-/* ── DEPOSIT / WITHDRAW ───────────────────────────────────────── */
+/* ── DEPOSIT / WITHDRAW SCREENS ──────────────────────────────── */
+#depositScreen, #withdrawScreen {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: unset !important;
+}
+#depositScreen.active, #withdrawScreen.active {
+  display: flex !important;
+}
+
+.dep-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  min-height: 0;
+}
+.dep-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+.dep-balance-card {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1.5px solid var(--ink);
+  background: var(--bone);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dep-bal-label {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--mute);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.dep-bal-num {
+  font-family: var(--disp-f);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.dep-bal-num::before { content: '$'; }
+.dep-usdt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--mono-f);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.dep-div-label {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mute);
+  margin-bottom: 10px;
+}
+.dep-amt-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.dep-amt-btn {
+  flex: 1;
+  padding: 12px 0;
+  border: 1.5px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+  font-family: var(--mono-f);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.08s;
+}
+.dep-amt-btn.selected {
+  background: var(--ink);
+  color: var(--bone);
+}
+.dep-amt-btn:active { opacity: 0.7; }
+.dep-big-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--ink) !important;
+  background: var(--bone) !important;
+  font-family: var(--disp-f) !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  outline: none;
+  text-align: center;
+  margin-bottom: 14px;
+  color: var(--ink) !important;
+  box-sizing: border-box;
+  display: block;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.dep-big-input:focus { border-color: var(--red) !important; }
+.dep-big-input.over { border-color: var(--red) !important; color: var(--red) !important; }
+.dep-addr-card {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--ink);
+  background: var(--bone);
+}
+.dep-addr-text {
+  font-family: var(--mono-f);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.dep-copy-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--mono-f);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-align: center;
+  transition: all 0.12s;
+  border-radius: 0;
+}
+.dep-copy-btn.copied {
+  background: var(--acid) !important;
+  color: var(--ink) !important;
+  border-color: var(--ink) !important;
+}
+.dep-qr-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 90px;
+  border: 1.5px dashed var(--ink);
+  margin-bottom: 14px;
+  font-family: var(--mono-f);
+  font-size: 10px;
+  color: var(--mute);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.dep-credit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  margin-bottom: 10px;
+}
+.dep-credit-label {
+  font-family: var(--mono-f);
+  font-size: 11px;
+  color: var(--mute);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.dep-credit-amt {
+  font-family: var(--disp-f);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--red);
+}
+.dep-bottom-bar {
+  padding: 10px 16px 14px;
+  border-top: 1.5px solid var(--ink);
+  background: var(--bone);
+  flex-shrink: 0;
+}
+.dep-bottom-note {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--mute);
+  letter-spacing: 0.14em;
+  text-align: center;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+/* Withdraw-specific */
+.dep-over-error {
+  font-family: var(--mono-f);
+  font-size: 10px;
+  color: var(--red);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.dep-addr-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--ink) !important;
+  background: var(--bone) !important;
+  font-family: var(--mono-f) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  outline: none;
+  margin-bottom: 6px;
+  color: var(--ink) !important;
+  display: block;
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.dep-addr-input:focus { border-color: var(--red) !important; }
+.dep-addr-warn {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--mute);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.dep-fee-box {
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding: 10px 0;
+  margin-bottom: 14px;
+}
+.dep-fee-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.dep-fee-row:last-child { margin-bottom: 0; }
+.dep-fee-label {
+  font-family: var(--mono-f);
+  font-size: 11px;
+  color: var(--mute);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dep-fee-amt {
+  font-family: var(--mono-f);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mute);
+}
+.dep-receive-amt {
+  font-family: var(--disp-f);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--red);
+}
+
+/* legacy – keep for old JS compat */
 .address-box {
   background: var(--bone-2) !important;
   border: 1.5px solid var(--ink) !important;

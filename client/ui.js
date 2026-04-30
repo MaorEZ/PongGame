@@ -133,21 +133,13 @@ document.getElementById('depositBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
     showScreen('depositScreen');
+    syncDepositUI();
 });
 
 document.getElementById('playAIBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
-    // Navigate to room browser where practice section lives
-    selectedGameMode = selectedGameMode || 'classic';
-    selectedBudget   = selectedBudget   || 100;
-    selectedBetAmount = selectedBudget;
-    syncRoomBrowserUI();
-    showScreen('roomBrowserScreen');
-    requestRoomList();
-    startRoomPolling();
-    // Open the practice picker automatically
-    setTimeout(() => openPracticePicker(), 150);
+    showPracticeModal();
 });
 
 // === Room Browser Practice vs AI (inline, no modal) ===
@@ -165,7 +157,7 @@ function closePracticePicker() {
 
 document.getElementById('rbPracticeBtn').addEventListener('click', () => {
     hapticFeedback('light');
-    openPracticePicker();
+    showPracticeModal();
 });
 
 document.getElementById('rbPracticeClose').addEventListener('click', () => {
@@ -739,6 +731,7 @@ document.getElementById('withdrawBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
     showScreen('withdrawScreen');
+    syncWithdrawUI();
 });
 
 document.getElementById('customizationBtn').addEventListener('click', () => {
@@ -1066,24 +1059,30 @@ document.getElementById('filterAmount').addEventListener('change', () => {
 // Copy deposit address
 document.getElementById('copyAddressBtn').addEventListener('click', () => {
     const address = document.getElementById('depositAddress').textContent;
+    const btn = document.getElementById('copyAddressBtn');
+
+    const onCopied = () => {
+        hapticFeedback('success');
+        btn.textContent = '✓ COPIED';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = '⎘ COPY ADDRESS';
+            btn.classList.remove('copied');
+        }, 1400);
+    };
 
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(address).then(() => {
-            hapticFeedback('success');
-            showNotification('Address copied!');
-        }).catch(err => {
+        navigator.clipboard.writeText(address).then(onCopied).catch(err => {
             console.error('Failed to copy:', err);
         });
     } else {
-        // Fallback for older browsers
         const textArea = document.createElement('textarea');
         textArea.value = address;
         document.body.appendChild(textArea);
         textArea.select();
         try {
             document.execCommand('copy');
-            hapticFeedback('success');
-            showNotification('Address copied!');
+            onCopied();
         } catch (err) {
             console.error('Failed to copy:', err);
         }
@@ -1093,7 +1092,8 @@ document.getElementById('copyAddressBtn').addEventListener('click', () => {
 
 // Confirm deposit
 document.getElementById('confirmDepositBtn').addEventListener('click', () => {
-    const amount = parseFloat(document.getElementById('depositAmountInput').value);
+    const raw = document.getElementById('depositAmountInput').value.replace(/[^0-9.]/g, '');
+    const amount = parseFloat(raw);
 
     if (!amount || amount <= 0) {
         showNotification('Please enter a valid amount');
@@ -1101,37 +1101,28 @@ document.getElementById('confirmDepositBtn').addEventListener('click', () => {
     }
 
     hapticFeedback('medium');
-
-    // In production, this would interact with TON wallet
     showNotification('Deposit feature will be integrated with TON wallet');
 
-    // For testing: simulate deposit
     sendToServer({
         type: 'deposit',
         userId: AppState.user.id,
         amount: amount
     });
 
-    document.getElementById('depositAmountInput').value = '';
+    depositAmt = 100;
+    syncDepositUI();
 });
 
 // Live fee preview on withdraw amount input
 document.getElementById('withdrawAmount').addEventListener('input', () => {
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    const note  = document.getElementById('withdrawFeeNote');
-    const netEl = document.getElementById('withdrawNetAmount');
-    if (note && netEl && amount > 0) {
-        note.style.display = 'block';
-        netEl.textContent = (amount * 0.99).toFixed(2);
-    } else if (note) {
-        note.style.display = 'none';
-    }
+    updateWithdrawState();
 });
 
 // Confirm withdrawal
 document.getElementById('confirmWithdrawBtn').addEventListener('click', () => {
     const address = document.getElementById('withdrawAddress').value.trim();
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
+    const raw = document.getElementById('withdrawAmount').value.replace(/[^0-9.]/g, '');
+    const amount = parseFloat(raw);
 
     if (!address) {
         showNotification('Please enter a wallet address');
@@ -1160,7 +1151,8 @@ document.getElementById('confirmWithdrawBtn').addEventListener('click', () => {
             });
 
             document.getElementById('withdrawAddress').value = '';
-            document.getElementById('withdrawAmount').value = '';
+            document.getElementById('withdrawAmount').value = '$50';
+            updateWithdrawState();
 
             showNotification('Withdrawal request submitted');
             showScreen('mainMenu');
@@ -2371,3 +2363,109 @@ window.launchConfetti = function() {
     }
     draw();
 };
+
+// ═══════════════════════════════════════════════
+// DEPOSIT SCREEN
+// ═══════════════════════════════════════════════
+let depositAmt = 100;
+
+function syncDepositUI() {
+    const bal = AppState.user.balance || 0;
+    const balEl = document.getElementById('depositBalanceDisplay');
+    if (balEl) balEl.textContent = bal.toFixed(2);
+
+    document.querySelectorAll('.dep-amt-btn').forEach(b => {
+        b.classList.toggle('selected', parseInt(b.dataset.depAmt) === depositAmt);
+    });
+
+    const inp = document.getElementById('depositAmountInput');
+    if (inp) inp.value = '$' + depositAmt;
+
+    const credit = document.getElementById('depositCreditAmt');
+    if (credit) credit.textContent = '+$' + depositAmt;
+
+    const btn = document.getElementById('confirmDepositBtn');
+    if (btn) btn.textContent = 'CONFIRM · DEPOSIT $' + depositAmt;
+}
+
+document.querySelectorAll('.dep-amt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        depositAmt = parseInt(btn.dataset.depAmt);
+        syncDepositUI();
+    });
+});
+
+document.getElementById('depositAmountInput').addEventListener('input', () => {
+    const val = parseInt(document.getElementById('depositAmountInput').value.replace(/\D/g, '') || '0');
+    depositAmt = val;
+    const credit = document.getElementById('depositCreditAmt');
+    if (credit) credit.textContent = '+$' + val;
+    const btn = document.getElementById('confirmDepositBtn');
+    if (btn) btn.textContent = 'CONFIRM · DEPOSIT $' + val;
+    document.querySelectorAll('.dep-amt-btn').forEach(b => {
+        b.classList.toggle('selected', parseInt(b.dataset.depAmt) === val);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// WITHDRAW SCREEN
+// ═══════════════════════════════════════════════
+function syncWithdrawUI() {
+    const bal = AppState.user.balance || 0;
+    const inp = document.getElementById('withdrawAmount');
+    if (inp && (!inp.value || inp.value === '$0')) inp.value = '$50';
+    updateWithdrawState();
+}
+
+function updateWithdrawState() {
+    const bal = AppState.user.balance || 0;
+    const raw = (document.getElementById('withdrawAmount').value || '').replace(/[^0-9.]/g, '');
+    const wAmt = parseFloat(raw) || 0;
+    const over = wAmt > bal;
+    const fee  = +(wAmt * 0.01).toFixed(2);
+    const out  = +(wAmt - fee).toFixed(2);
+
+    const inp = document.getElementById('withdrawAmount');
+    if (inp) {
+        inp.style.borderColor = over ? 'var(--red)' : '';
+        inp.style.color = over ? 'var(--red)' : '';
+    }
+
+    const errEl = document.getElementById('withdrawOverError');
+    if (errEl) errEl.style.display = over ? 'block' : 'none';
+
+    const feeEl = document.getElementById('withdrawFeeAmt');
+    if (feeEl) feeEl.textContent = '−$' + fee.toFixed(2);
+
+    const outEl = document.getElementById('withdrawReceiveAmt');
+    if (outEl) outEl.textContent = '$' + out.toFixed(2);
+
+    const maxVal = Math.floor(bal);
+    document.querySelectorAll('.wdw-amt-btn').forEach(b => {
+        const v = b.dataset.wdwAmt === 'max' ? maxVal : parseInt(b.dataset.wdwAmt);
+        b.classList.toggle('selected', v === Math.round(wAmt));
+    });
+
+    const addr = (document.getElementById('withdrawAddress').value || '').trim();
+    const disabled = over || addr.length < 10 || wAmt <= 0;
+    const confirmBtn = document.getElementById('confirmWithdrawBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = disabled;
+        confirmBtn.style.opacity = disabled ? '0.4' : '1';
+        confirmBtn.textContent = 'CONFIRM · WITHDRAW $' + out.toFixed(2);
+    }
+}
+
+document.querySelectorAll('.wdw-amt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const bal = AppState.user.balance || 0;
+        const val = btn.dataset.wdwAmt === 'max' ? Math.floor(bal) : parseInt(btn.dataset.wdwAmt);
+        const inp = document.getElementById('withdrawAmount');
+        if (inp) inp.value = '$' + val;
+        updateWithdrawState();
+    });
+});
+
+document.getElementById('withdrawAddress').addEventListener('input', () => {
+    updateWithdrawState();
+});

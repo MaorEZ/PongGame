@@ -676,9 +676,10 @@ function updateBalance(balance) {
     document.getElementById('balanceAmount').textContent = balance.toFixed(2);
 
     const availableBalance = document.getElementById('availableBalance');
-    if (availableBalance) {
-        availableBalance.textContent = balance.toFixed(2);
-    }
+    if (availableBalance) availableBalance.textContent = balance.toFixed(2);
+
+    const depositBalanceDisplay = document.getElementById('depositBalanceDisplay');
+    if (depositBalanceDisplay) depositBalanceDisplay.textContent = balance.toFixed(2);
 }
 
 // Screen Navigation
