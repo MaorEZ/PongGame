@@ -41,7 +41,7 @@ function persistUserStats(userId, user) {
 }
 
 // ── Security Config ───────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 // Your Telegram user ID(s) — only these can use admin commands
 // Find your ID by messaging @userinfobot on Telegram
