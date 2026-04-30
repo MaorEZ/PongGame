@@ -190,16 +190,7 @@
                     </div>
                 </div>
 
-                <!-- Practice dashed strip -->
-                <button class="gam-practice-btn" id="practiceSquare">
-                    <div>
-                        <span class="gam-practice-no-money">NO MONEY</span>
-                        <span class="gam-practice-label">Practice vs AI</span>
-                    </div>
-                    <span class="gam-practice-arrow">→</span>
-                </button>
-
-                <div style="height:24px"></div>
+                <div style="height:8px"></div>
             </div>
 
             <!-- Slide-out Menu -->
@@ -451,39 +442,71 @@
         <div id="myRoomSlot" class="rb-my-room"></div>
         <div id="roomList" class="rb-list"></div>
 
+        <!-- Practice vs AI strip (inline, no modal) -->
+        <div class="rb-practice-zone" id="rbPracticeZone">
+            <button class="rb-practice-strip" id="rbPracticeBtn">
+                <div>
+                    <span class="rb-practice-tag">NO MONEY</span>
+                    <span class="rb-practice-txt">Practice vs AI</span>
+                </div>
+                <span class="rb-practice-arr">→</span>
+            </button>
+            <div class="rb-practice-picker" id="rbPracticePicker" style="display:none;">
+                <div class="rb-section-label" style="padding:10px 0 8px;">▸ PICK MODE</div>
+                <div class="rb-mode-grid">
+                    <button class="rb-mode-btn rb-pmode-btn" data-pmode="classic">
+                        <div class="rb-mode-name">CLASSIC</div>
+                        <div class="rb-mode-desc">pure skill</div>
+                    </button>
+                    <button class="rb-mode-btn rb-pmode-btn" data-pmode="chaotic">
+                        <div class="rb-mode-name">CHAOTIC</div>
+                        <div class="rb-mode-desc">power-ups</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Sticky create -->
         <div class="rb-bottom">
             <button class="rb-create-btn" id="createRoomBtn">+ CREATE ROOM AT $10</button>
         </div>
     </div>
 
-    <!-- Match Countdown Screen -->
+    <!-- Match Countdown Screen — full-viewport VS slam, no back possible -->
     <div id="matchCountdownScreen" class="screen">
-        <div class="mc-container">
-            <div class="mc-header">Match Found</div>
-            <div class="mc-players">
-                <div class="mc-player">
+        <div class="mc-vs-screen">
+            <div class="mc-vs-status">
+                <span class="mc-vs-locked">● MATCH LOCKED</span>
+                <span class="mc-vs-room" id="mcRoomId">ROOM #—</span>
+            </div>
+
+            <div class="mc-vs-info">
+                <div class="mc-vs-headup" id="mcMode">HEADS-UP · CLASSIC</div>
+                <div class="mc-vs-pot">POT <span class="mc-vs-pot-amt" id="mcWager">$20</span></div>
+            </div>
+
+            <div class="mc-vs-players">
+                <div class="mc-vs-player mc-vs-p1">
                     <div class="mc-avatar mc-p1" id="mcPlayer1Avatar">P1</div>
                     <div class="mc-name" id="mcPlayer1Name">Player 1</div>
+                    <div class="mc-elo" id="mcPlayer1Elo"></div>
                 </div>
-                <div class="mc-vs">VS</div>
-                <div class="mc-player">
+                <div class="mc-vs-word">VS</div>
+                <div class="mc-vs-player mc-vs-p2">
                     <div class="mc-avatar mc-p2" id="mcPlayer2Avatar">P2</div>
                     <div class="mc-name" id="mcPlayer2Name">Player 2</div>
+                    <div class="mc-elo" id="mcPlayer2Elo"></div>
                 </div>
             </div>
-            <div class="mc-info">
-                <span class="mc-mode" id="mcMode">Classic</span>
-                <span class="mc-wager" id="mcWager">$10</span>
-            </div>
-            <div class="mc-countdown-ring">
-                <svg class="mc-ring-svg" viewBox="0 0 120 120">
-                    <circle class="mc-ring-bg" cx="60" cy="60" r="52" />
-                    <circle class="mc-ring-fg" id="mcRingFg" cx="60" cy="60" r="52" />
-                </svg>
-                <div class="mc-countdown-num" id="mcCountdownNum">10</div>
-            </div>
+
+            <div class="mc-vs-countdown" id="mcCountdownNum">10</div>
+            <div class="mc-vs-noback">▸ NO BACKING OUT</div>
             <div class="mc-status" id="mcStatus">Get ready...</div>
+
+            <!-- keep the ring SVG for JS compat but hide it -->
+            <svg style="display:none">
+                <circle id="mcRingFg" />
+            </svg>
         </div>
     </div>
 
@@ -684,14 +707,21 @@
                 <p id="resultOpponent" style="display:none; font-size:13px; color:#888; margin-top:4px;"></p>
                 <div class="result-amount">
                     <span class="amount-won" id="amountWon">+19.00</span>
-                    <span class="currency">USDT</span>
+                    <span class="currency" id="resultCurrencyLabel">USDT</span>
                 </div>
+
+                <!-- AI-only streak row -->
+                <div id="aiStreakRow" style="display:none; margin: 4px 0 12px;">
+                    <span id="aiStreakVal" style="font-family:var(--disp-f,inherit);font-size:1.1rem;font-weight:800;color:#f59e0b;margin-right:6px;"></span>
+                    <span style="font-size:0.85rem;color:#888;">STREAK</span>
+                </div>
+
                 <div class="result-details">
                     <p>Final Score: <span id="finalScore">3-1</span></p>
-                    <p style="font-size:12px;color:#666;">
+                    <p id="resultProofRow" style="font-size:12px;color:#666;">
                         Proof ID: <span id="resultMatchId" style="font-family:monospace;color:#4fd1c5;cursor:pointer;" title="Tap to copy">---</span>
                     </p>
-                    <p>New Balance: <span id="newBalance">19.00</span> USDT</p>
+                    <p id="resultBalanceRow">New Balance: <span id="newBalance">19.00</span> USDT</p>
                     <p class="elo-change-row" id="eloChangeRow" style="display:none;">
                         ELO: <span id="eloChangeText"></span> → <span id="eloNewText"></span>
                     </p>

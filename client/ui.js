@@ -116,10 +116,7 @@ onTap(document.getElementById('playSquare'), () => {
     startRoomPolling();
 });
 
-onTap(document.getElementById('practiceSquare'), () => {
-    hapticFeedback('light');
-    showPracticeModal();
-});
+// practiceSquare removed from main menu; practice lives in room browser
 
 document.getElementById('comingSoon1').addEventListener('click', () => {
     hapticFeedback('light');
@@ -141,7 +138,43 @@ document.getElementById('depositBtn').addEventListener('click', () => {
 document.getElementById('playAIBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
-    showPracticeModal();
+    // Navigate to room browser where practice section lives
+    selectedGameMode = selectedGameMode || 'classic';
+    selectedBudget   = selectedBudget   || 10;
+    selectedBetAmount = selectedBudget;
+    syncRoomBrowserUI();
+    showScreen('roomBrowserScreen');
+    requestRoomList();
+    startRoomPolling();
+    // Open the practice picker automatically
+    setTimeout(() => {
+        const picker = document.getElementById('rbPracticePicker');
+        if (picker) picker.style.display = 'block';
+    }, 150);
+});
+
+// === Room Browser Practice vs AI (inline, no modal) ===
+
+document.getElementById('rbPracticeBtn').addEventListener('click', () => {
+    hapticFeedback('light');
+    const picker = document.getElementById('rbPracticePicker');
+    const isOpen = picker.style.display !== 'none';
+    picker.style.display = isOpen ? 'none' : 'block';
+    // Reset selections
+    document.querySelectorAll('.rb-pmode-btn').forEach(b => b.classList.remove('selected'));
+});
+
+document.querySelectorAll('.rb-pmode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        hapticFeedback('medium');
+        document.querySelectorAll('.rb-pmode-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedGameMode = btn.dataset.pmode;
+        // Close picker and start AI game
+        document.getElementById('rbPracticePicker').style.display = 'none';
+        stopRoomPolling();
+        startAIGame();
+    });
 });
 
 // === Inline Room Browser controls (mode toggle + stake row) ===
@@ -150,7 +183,7 @@ function syncRoomBrowserUI() {
     const mode = selectedGameMode || 'classic';
     const stake = selectedBudget || 10;
 
-    document.querySelectorAll('.rb-mode-btn').forEach(b => {
+    document.querySelectorAll('.rb-mode-btn:not(.rb-pmode-btn)').forEach(b => {
         b.classList.toggle('selected', b.dataset.mode === mode);
     });
     document.querySelectorAll('.rb-stake-btn').forEach(b => {
@@ -162,7 +195,8 @@ function syncRoomBrowserUI() {
     if (winEl) winEl.innerHTML = 'WIN <span style="color:var(--red);font-weight:700">$' + Math.round(stake * 1.9) + '</span>';
 }
 
-document.querySelectorAll('.rb-mode-btn').forEach(btn => {
+// Only target the PvP mode toggle buttons (not the practice picker buttons)
+document.querySelectorAll('.rb-mode-btn:not(.rb-pmode-btn)').forEach(btn => {
     btn.addEventListener('click', () => {
         hapticFeedback('light');
         selectedGameMode = btn.dataset.mode;
@@ -525,7 +559,6 @@ const COUNTDOWN_TOTAL = 10; // must match server COUNTDOWN_SECS
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // r=52 from SVG
 
 function populateCountdownScreen(data) {
-    // Player names & avatars
     const p1Name = data.player1Name || 'Player 1';
     const p2Name = data.player2Name || 'Player 2';
 
@@ -534,43 +567,49 @@ function populateCountdownScreen(data) {
     document.getElementById('mcPlayer1Avatar').textContent = getInitials(p1Name);
     document.getElementById('mcPlayer2Avatar').textContent = getInitials(p2Name);
 
-    // Mode & wager
+    // ELO under names (optional)
+    const p1Elo = document.getElementById('mcPlayer1Elo');
+    const p2Elo = document.getElementById('mcPlayer2Elo');
+    if (p1Elo) p1Elo.textContent = data.player1Elo ? data.player1Elo + ' ELO' : '';
+    if (p2Elo) p2Elo.textContent = data.player2Elo ? data.player2Elo + ' ELO' : '';
+
+    // Mode / wager in the heads-up label
     const mode = data.gameMode || 'classic';
-    const modeEl = document.getElementById('mcMode');
-    modeEl.textContent = mode === 'chaotic' ? 'Chaotic' : 'Classic';
-    modeEl.className = 'mc-mode' + (mode === 'chaotic' ? ' chaotic' : '');
+    const modeHeadup = document.getElementById('mcMode');
+    if (modeHeadup) {
+        modeHeadup.textContent = '▸ HEADS-UP · ' + (mode === 'chaotic' ? 'CHAOTIC' : 'CLASSIC');
+        // Don't overwrite the class — just toggle a chaotic modifier
+        modeHeadup.classList.toggle('chaotic', mode === 'chaotic');
+    }
 
-    document.getElementById('mcWager').textContent = '$' + (data.betAmount || 0);
+    const wagerEl = document.getElementById('mcWager');
+    if (wagerEl) wagerEl.textContent = '$' + ((data.betAmount || 0) * 2);
 
-    // Reset countdown ring
-    const ring = document.getElementById('mcRingFg');
-    ring.style.strokeDasharray = RING_CIRCUMFERENCE;
-    ring.style.strokeDashoffset = '0';
+    // Room ID
+    const roomEl = document.getElementById('mcRoomId');
+    if (roomEl) roomEl.textContent = data.roomId ? 'ROOM ' + data.roomId.slice(0, 7).toUpperCase() : 'ROOM #—';
 
-    document.getElementById('mcCountdownNum').textContent = COUNTDOWN_TOTAL;
-    document.getElementById('mcStatus').textContent = 'Get ready...';
+    const num = document.getElementById('mcCountdownNum');
+    if (num) { num.textContent = COUNTDOWN_TOTAL; num.classList.remove('urgent'); }
+    const status = document.getElementById('mcStatus');
+    if (status) status.textContent = 'GET READY';
 }
 
 function updateCountdownRing(secondsLeft) {
     const num = document.getElementById('mcCountdownNum');
-    const ring = document.getElementById('mcRingFg');
     const status = document.getElementById('mcStatus');
 
-    if (num) num.textContent = secondsLeft;
-
-    // Animate ring: full circle → empty as countdown ticks
-    if (ring) {
-        const fraction = 1 - (secondsLeft / COUNTDOWN_TOTAL);
-        ring.style.strokeDasharray = RING_CIRCUMFERENCE;
-        ring.style.strokeDashoffset = (fraction * RING_CIRCUMFERENCE).toString();
+    if (num) {
+        num.textContent = secondsLeft;
+        num.classList.toggle('urgent', secondsLeft <= 3);
     }
 
     if (status) {
         if (secondsLeft <= 3) {
-            status.textContent = 'Starting...';
+            status.textContent = 'STARTING NOW...';
             hapticFeedback('medium');
         } else if (secondsLeft <= 5) {
-            status.textContent = 'Almost there...';
+            status.textContent = 'ALMOST TIME...';
         }
     }
 }
@@ -763,8 +802,17 @@ document.getElementById('backFromWithdraw').addEventListener('click', () => {
 
 document.getElementById('backToMenuBtn').addEventListener('click', () => {
     hapticFeedback('light');
-    showScreen('mainMenu');
-    requestBalance();
+    const isAIResult = document.getElementById('backToMenuBtn').dataset.aiResult === 'true';
+    if (isAIResult) {
+        // Return to room browser so they can play again or find a match
+        syncRoomBrowserUI();
+        showScreen('roomBrowserScreen');
+        requestRoomList();
+        startRoomPolling();
+    } else {
+        showScreen('mainMenu');
+        requestBalance();
+    }
 });
 
 document.getElementById('backFromProfile').addEventListener('click', () => {

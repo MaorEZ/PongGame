@@ -685,6 +685,11 @@ function updateBalance(balance) {
 function showScreen(screenId) {
     console.log('[NAV] showScreen called:', screenId);
 
+    // Reset scroll position so every screen starts at the top
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
     // Hide all screens
     const screens = document.querySelectorAll('.screen');
     screens.forEach(screen => screen.classList.remove('active'));

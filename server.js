@@ -41,7 +41,7 @@ function persistUserStats(userId, user) {
 }
 
 // ── Security Config ───────────────────────────────────────────────────────────
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Your Telegram user ID(s) — only these can use admin commands
 // Find your ID by messaging @userinfobot on Telegram
@@ -2228,8 +2228,8 @@ function handleDoubleOrNothingDecline(socketId, ws, data) {
 
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server running on http://192.168.1.129:${PORT}`);
-    console.log(`✅ WebSocket server ready on ws://192.168.1.129:${PORT}`);
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ WebSocket server ready on port ${PORT}`);
     console.log(`✅ Listening on all interfaces (0.0.0.0)`);
     console.log(`✅ Anti-cheat system active`);
 });

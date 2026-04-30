@@ -25,6 +25,10 @@
 }
 
 /* ── BASE ─────────────────────────────────────────────────────── */
+html, body {
+  overflow: hidden !important;
+  height: 100% !important;
+}
 body {
   font-family: var(--disp-f) !important;
   background: var(--bone) !important;
@@ -32,6 +36,11 @@ body {
   -webkit-font-smoothing: antialiased !important;
 }
 body::before, body::after { display: none !important; }
+
+/* Customization screen needs its own scroll */
+#customizationScreen.active {
+  overflow-y: auto !important;
+}
 
 /* ── ALL SCREENS ─────────────────────────────────────────────── */
 .screen {
@@ -331,7 +340,8 @@ body::before, body::after { display: none !important; }
 .gam-scroll {
   flex: 1;
   padding: 12px 14px 0;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   min-height: 0;
 }
 .gam-scroll::-webkit-scrollbar { width: 0; height: 0; }
@@ -982,6 +992,50 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   padding: 2px 6px;
 }
 
+/* ── ROOM BROWSER — PRACTICE STRIP ──────────────────────────── */
+.rb-practice-zone {
+  padding: 10px 16px 6px;
+  border-top: 1px solid rgba(10,10,10,0.1);
+  flex-shrink: 0;
+}
+.rb-practice-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 1.5px dashed var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.rb-practice-strip:active { opacity: 0.65; }
+.rb-practice-tag {
+  display: block;
+  font-family: var(--mono-f);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mute);
+}
+.rb-practice-txt {
+  display: block;
+  font-family: var(--disp-f);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.rb-practice-arr {
+  font-family: var(--mono-f);
+  font-size: 14px;
+  color: var(--ink);
+}
+.rb-practice-picker {
+  padding: 4px 0 8px;
+}
+
 /* bottom create bar */
 .rb-bottom {
   background: var(--bone) !important;
@@ -1006,20 +1060,160 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 }
 .rb-create-btn:active { transform: translate(2px,2px) !important; }
 
-/* ── MATCH COUNTDOWN ──────────────────────────────────────────── */
-#matchCountdownScreen { background: var(--ink) !important; color: var(--bone) !important; }
-.mc-container { background: var(--ink) !important; color: var(--bone) !important; }
-.mc-header { color: var(--bone) !important; font-family: var(--disp-f) !important; font-weight: 800 !important; }
-.mc-vs { color: var(--red) !important; font-family: var(--disp-f) !important; font-weight: 800 !important; font-style: italic !important; animation: none !important; }
-.mc-name { color: var(--bone) !important; font-family: var(--disp-f) !important; font-weight: 700 !important; }
-.mc-countdown-num { color: var(--bone) !important; font-family: var(--disp-f) !important; font-weight: 800 !important; }
-.mc-ring-fg { stroke: var(--red) !important; }
-.mc-ring-bg { stroke: var(--line) !important; }
-.mc-avatar { border-radius: 0 !important; border: 1.5px solid var(--line) !important; }
+/* ── MATCH COUNTDOWN — full-viewport VS slam ──────────────────── */
+#matchCountdownScreen {
+  background: var(--ink) !important;
+  color: var(--bone) !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: unset !important;
+}
+#matchCountdownScreen.active {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+}
+
+.mc-vs-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
+  overflow: hidden;
+}
+
+.mc-vs-status {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.mc-vs-locked {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.mc-vs-room {
+  font-family: var(--mono-f);
+  font-size: 9.5px;
+  color: var(--mute-2);
+  letter-spacing: 0.1em;
+}
+
+.mc-vs-info {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.mc-vs-headup {
+  font-family: var(--mono-f);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.mc-vs-pot {
+  font-family: var(--mono-f);
+  font-size: 13px;
+  color: var(--mute-2);
+  letter-spacing: 0.06em;
+}
+.mc-vs-pot-amt {
+  font-family: var(--disp-f);
+  font-weight: 800;
+  color: var(--bone);
+}
+
+.mc-vs-players {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.mc-vs-player { text-align: center; }
+.mc-vs-word {
+  font-family: var(--disp-f);
+  font-size: 72px;
+  font-weight: 800;
+  font-style: italic;
+  color: var(--red);
+  letter-spacing: -0.06em;
+  line-height: 0.85;
+  padding: 0 4px;
+}
+.mc-avatar {
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--disp-f); font-weight: 800; font-size: 18px;
+  border-radius: 0 !important;
+  border: 1.5px solid var(--line) !important;
+  margin: 0 auto 8px;
+}
 .mc-p1 { background: var(--acid) !important; color: var(--ink) !important; }
 .mc-p2 { background: var(--red) !important; color: var(--bone) !important; }
-.mc-status { font-family: var(--mono-f) !important; color: var(--mute-2) !important; letter-spacing: 0.1em !important; }
-.mc-mode, .mc-wager { font-family: var(--mono-f) !important; font-weight: 700 !important; border-radius: 0 !important; }
+.mc-name {
+  font-family: var(--disp-f) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--bone) !important;
+  max-width: 80px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 0 auto;
+}
+.mc-elo {
+  font-family: var(--mono-f);
+  font-size: 9px;
+  color: var(--mute-2);
+  margin-top: 2px;
+  letter-spacing: 0.1em;
+}
+
+.mc-vs-countdown {
+  font-family: var(--disp-f);
+  font-size: 120px;
+  font-weight: 800;
+  color: var(--bone);
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  text-align: center;
+  transition: color 0.2s;
+}
+.mc-vs-countdown.urgent { color: var(--red) !important; }
+
+.mc-vs-noback {
+  font-family: var(--mono-f);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--acid);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-top: 10px;
+}
+.mc-status {
+  font-family: var(--mono-f) !important;
+  font-size: 11px !important;
+  color: var(--mute-2) !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  margin-top: 8px;
+}
+.mc-mode, .mc-wager { display: none !important; }
 
 /* ── USER INFO (misc screens) ─────────────────────────────────── */
 .user-info {
@@ -1151,6 +1345,97 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 }
 #gameScreen .game-container {
   height: 100vh !important;
+  height: 100dvh !important;
   max-height: 100vh !important;
   overflow: hidden !important;
+}
+
+/* ── GAME SCREEN — position game-status as overlay, not in flow ─ */
+#gameScreen .game-status {
+  position: absolute !important;
+  bottom: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, 50%) !important;
+  background: rgba(10,10,10,0.85) !important;
+  color: var(--acid) !important;
+  font-family: var(--mono-f) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  padding: 8px 16px !important;
+  border-radius: 0 !important;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* ── RESULT SCREEN ────────────────────────────────────────────── */
+#resultScreen {
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  min-height: unset !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+#resultScreen.active {
+  justify-content: flex-start !important;
+  align-items: center !important;
+  padding: 20px !important;
+}
+#resultScreen .result-content h2 {
+  font-family: var(--disp-f) !important;
+  font-size: 5rem !important;
+  font-weight: 800 !important;
+  font-style: italic !important;
+  letter-spacing: -0.04em !important;
+  line-height: 0.85 !important;
+  animation: none !important;
+}
+#resultScreen .result-content h2.win {
+  color: var(--ink) !important;
+  text-shadow: none !important;
+}
+#resultScreen .result-content h2.lose {
+  color: var(--red) !important;
+  text-shadow: none !important;
+}
+#resultScreen .result-content h2.draw {
+  color: var(--mute) !important;
+  text-shadow: none !important;
+}
+#resultScreen .result-amount {
+  font-family: var(--disp-f) !important;
+  font-size: 1.8rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+#resultScreen .amount-won {
+  color: var(--red) !important;
+  text-shadow: none !important;
+}
+#resultScreen .amount-lost {
+  color: var(--mute) !important;
+}
+#resultScreen .result-details {
+  background: var(--bone-2) !important;
+  border: 1.5px solid var(--ink) !important;
+  border-radius: 0 !important;
+}
+#resultScreen .result-details p {
+  font-family: var(--mono-f) !important;
+  color: var(--ink) !important;
+  font-size: 12px !important;
+}
+#resultScreen #backToMenuBtn {
+  font-family: var(--mono-f) !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+}
+#aiStreakRow #aiStreakVal {
+  font-family: var(--disp-f) !important;
+  font-size: 1.4rem !important;
+  font-weight: 800 !important;
+  color: var(--red) !important;
 }

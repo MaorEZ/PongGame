@@ -1616,109 +1616,125 @@ function endMultiplayerGame() {
 
 // End AI game
 function endAIGame() {
-    // Guard against being called multiple times
     if (!Game.isActive && !Game.roundActive) return;
     Game.isActive = false;
     Game.roundActive = false;
 
-    // Stop all timers
-    if (Game.gameTimerInterval) {
-        clearInterval(Game.gameTimerInterval);
-    }
-    if (Game.roundTimerInterval) {
-        clearInterval(Game.roundTimerInterval);
-        Game.roundTimerInterval = null;
-    }
+    if (Game.gameTimerInterval) { clearInterval(Game.gameTimerInterval); Game.gameTimerInterval = null; }
+    if (Game.roundTimerInterval) { clearInterval(Game.roundTimerInterval); Game.roundTimerInterval = null; }
+    if (_raceOverlayTimer) { clearInterval(_raceOverlayTimer); _raceOverlayTimer = null; }
 
     hapticFeedback('heavy');
 
     const isTie = Game.roundWins.player1 === Game.roundWins.player2;
     const isWinner = Game.roundWins.player1 > Game.roundWins.player2;
 
-    // Show result screen
     const resultTitle = document.getElementById('resultTitle');
-    const amountWon = document.getElementById('amountWon');
-    const finalScore = document.getElementById('finalScore');
-    const newBalance = document.getElementById('newBalance');
+    const amountWon   = document.getElementById('amountWon');
+    const finalScore  = document.getElementById('finalScore');
+    const newBalance  = document.getElementById('newBalance');
 
+    // --- Design-style: big W. / L. / DRAW ---
     if (isTie) {
-        resultTitle.textContent = 'Draw!';
-        resultTitle.classList.remove('win');
-        resultTitle.classList.remove('lose');
-        amountWon.textContent = 'Bets Returned';
+        resultTitle.textContent = 'DRAW.';
+        resultTitle.className = 'draw';
+        amountWon.textContent = '—';
+        amountWon.className = '';
         hapticFeedback('medium');
     } else if (isWinner) {
-        resultTitle.textContent = 'You Won!';
-        resultTitle.classList.add('win');
-        resultTitle.classList.remove('lose');
-        amountWon.textContent = 'Practice Game';
+        resultTitle.textContent = 'W.';
+        resultTitle.className = 'win';
+        amountWon.textContent = 'PRACTICE WIN';
+        amountWon.className = 'amount-won';
         hapticFeedback('success');
         SFX.play('win');
+        if (typeof window.launchConfetti === 'function') window.launchConfetti();
         recordWin(0, 0);
     } else {
-        resultTitle.textContent = 'AI Won';
-        resultTitle.classList.add('lose');
-        resultTitle.classList.remove('win');
-        amountWon.textContent = 'Practice Game';
+        resultTitle.textContent = 'L.';
+        resultTitle.className = 'lose';
+        amountWon.textContent = 'PRACTICE LOSS';
+        amountWon.className = 'amount-lost';
         hapticFeedback('error');
         SFX.play('lose');
         recordLoss(0);
     }
 
-    finalScore.textContent = Game.roundWins.player1 + '-' + Game.roundWins.player2 +
-        (isTie ? ' (Draw)' : '');
-    if (typeof window.setResultMatchId === 'function') window.setResultMatchId(Game.gameId || '');
-    newBalance.textContent = AppState.user.balance.toFixed(2);
+    finalScore.textContent = Game.roundWins.player1 + '-' + Game.roundWins.player2;
+    if (typeof window.setResultMatchId === 'function') window.setResultMatchId('');
+    if (newBalance) newBalance.textContent = AppState.user.balance.toFixed(2);
 
-    // Show rematch button for AI games
-    const rematchSection = document.getElementById('rematchSection');
-    rematchSection.style.display = 'block';
-    const rematchBtn = document.getElementById('rematchBtn');
-    rematchBtn.disabled = false;
-
-    // Rematch countdown
-    let rematchTime = 10;
-    document.getElementById('rematchCountdown').textContent = rematchTime;
-    const rematchInterval = setInterval(() => {
-        rematchTime--;
-        document.getElementById('rematchCountdown').textContent = rematchTime;
-        if (rematchTime <= 0) {
-            clearInterval(rematchInterval);
-            rematchSection.style.display = 'none';
-        }
-    }, 1000);
-
-    if (!rematchBtn.hasAttribute('data-init')) {
-        rematchBtn.addEventListener('click', () => {
-            clearInterval(rematchInterval);
-            // Restart AI game with same mode
-            showScreen('gameScreen');
-            const aiGameData = {
-                id: 'ai_' + Date.now(),
-                player1Id: AppState.user.id,
-                player1Name: AppState.user.name,
-                player2Name: 'AI Bot',
-                isAIGame: true,
-                gameMode: Game.gameMode
-            };
-            initGame(aiGameData);
-            startGame(aiGameData);
-            hapticFeedback('medium');
-        });
-        rematchBtn.setAttribute('data-init', 'true');
+    // Show streak if on a run
+    const streak = AppState.stats.currentStreak || 0;
+    const aiStreakRow = document.getElementById('aiStreakRow');
+    const aiStreakVal = document.getElementById('aiStreakVal');
+    if (aiStreakRow && aiStreakVal && streak > 0) {
+        aiStreakVal.textContent = '×' + streak + (streak >= 3 ? ' 🔥' : '');
+        aiStreakRow.style.display = 'block';
+    } else if (aiStreakRow) {
+        aiStreakRow.style.display = 'none';
     }
 
-    document.getElementById('reportMatchBtn').style.display = 'none';
+    // Hide PvP-only elements
+    const hide = ['eloChangeRow', 'emojiSection', 'doubleOrNothingBtn', 'doubleOfferBanner', 'reportMatchBtn', 'fairnessResult', 'resultOpponent', 'resultProofRow'];
+    hide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    // Hide currency label for AI result
+    const currencyLabel = document.getElementById('resultCurrencyLabel');
+    if (currencyLabel) currencyLabel.style.display = 'none';
+
+    // Hide balance row for AI (no money involved)
+    const balanceRow = document.getElementById('resultBalanceRow');
+    if (balanceRow) balanceRow.style.display = 'none';
+
+    // Rematch / Play Again section
+    const rematchSection = document.getElementById('rematchSection');
+    const rematchBtn     = document.getElementById('rematchBtn');
+    if (rematchSection && rematchBtn) {
+        rematchSection.style.display = 'block';
+        rematchBtn.disabled = false;
+        // Remove countdown, show plain "PLAY AGAIN"
+        rematchBtn.innerHTML = 'PLAY AGAIN →';
+        if (!rematchBtn.hasAttribute('data-ai-init')) {
+            rematchBtn.addEventListener('click', () => {
+                showScreen('gameScreen');
+                const aiGameData = {
+                    id: 'ai_' + Date.now(),
+                    player1Id: AppState.user.id,
+                    player1Name: AppState.user.name,
+                    player2Name: 'AI Bot',
+                    isAIGame: true,
+                    gameMode: Game.gameMode
+                };
+                initGame(aiGameData);
+                startGame(aiGameData);
+                hapticFeedback('medium');
+            });
+            rematchBtn.setAttribute('data-ai-init', 'true');
+        }
+    }
+
+    // Update "Back to Menu" → "BACK TO ARENA →"
+    const backBtn = document.getElementById('backToMenuBtn');
+    if (backBtn) {
+        backBtn.textContent = 'BACK TO ARENA →';
+        backBtn.dataset.aiResult = 'true';
+    }
 
     setTimeout(() => {
         showScreen('resultScreen');
     }, 1000);
 }
 
-// Resize canvas to fit screen
+// Resize canvas to fill game container minus info bar only
 function resizeCanvas() {
     Game.canvas.width = window.innerWidth;
-    Game.canvas.height = window.innerHeight - 120; // Account for UI bars
+    const infoBar = document.querySelector('.game-info-bar');
+    const infoH = infoBar ? infoBar.offsetHeight : 70;
+    Game.canvas.height = window.innerHeight - infoH;
 }
 
 // Reset ball and paddle positions
@@ -3009,6 +3025,19 @@ function onGameOver(data) {
     if (_raceOverlayTimer) { clearInterval(_raceOverlayTimer); _raceOverlayTimer = null; }
 
     hapticFeedback('heavy');
+
+    // Restore elements that endAIGame() may have hidden
+    const restore = ['resultProofRow', 'resultBalanceRow', 'resultCurrencyLabel'];
+    restore.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+    });
+    const aiStreakRow = document.getElementById('aiStreakRow');
+    if (aiStreakRow) aiStreakRow.style.display = 'none';
+    const backBtn = document.getElementById('backToMenuBtn');
+    if (backBtn) { backBtn.textContent = 'Back to Menu'; backBtn.dataset.aiResult = 'false'; }
+    const rematchBtn = document.getElementById('rematchBtn');
+    if (rematchBtn) { rematchBtn.removeAttribute('data-ai-init'); }
 
     if (data.newBalance !== undefined) updateBalance(data.newBalance);
 
