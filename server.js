@@ -325,7 +325,10 @@ const Database = {
 // Create HTTP server
 const server = http.createServer((req, res) => {
     // Serve static files
-    if (req.url === '/' || req.url === '/index.html') {
+    if (req.url === '/healthz') {
+        res.writeHead(200);
+        res.end('ok');
+    } else if (req.url === '/' || req.url === '/index.html') {
         serveFile(res, 'client/index.html', 'text/html');
     } else if (req.url.endsWith('.css')) {
         serveFile(res, 'client/' + req.url.substring(1), 'text/css');
