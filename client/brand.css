@@ -998,8 +998,8 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 
 /* ── ROOM BROWSER — PRACTICE STRIP ──────────────────────────── */
 .rb-practice-zone {
-  padding: 10px 16px 6px;
-  border-top: 1px solid rgba(10,10,10,0.1);
+  padding: 10px 16px 10px;
+  border-top: 1.5px solid var(--ink);
   flex-shrink: 0;
 }
 .rb-practice-strip {
@@ -1008,12 +1008,18 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   align-items: center;
   width: 100%;
   padding: 12px 14px;
-  background: transparent;
-  border: 1.5px dashed var(--ink);
+  background: var(--bone);
+  border: 1.5px solid var(--ink);
   cursor: pointer;
   text-align: left;
+  transition: all 0.08s;
 }
-.rb-practice-strip:active { opacity: 0.65; }
+.rb-practice-strip:active {
+  background: var(--ink);
+  color: var(--bone);
+}
+.rb-practice-strip:active .rb-practice-txt,
+.rb-practice-strip:active .rb-practice-arr { color: var(--bone); }
 .rb-practice-tag {
   display: block;
   font-family: var(--mono-f);
@@ -1026,18 +1032,34 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 .rb-practice-txt {
   display: block;
   font-family: var(--disp-f);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--ink);
   margin-top: 2px;
 }
 .rb-practice-arr {
   font-family: var(--mono-f);
-  font-size: 14px;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--ink);
 }
 .rb-practice-picker {
-  padding: 4px 0 8px;
+  padding: 0;
+}
+.rb-practice-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.rb-practice-close {
+  background: none;
+  border: none;
+  font-family: var(--mono-f);
+  font-size: 13px;
+  color: var(--mute);
+  cursor: pointer;
+  padding: 2px 4px;
 }
 
 /* bottom create bar */

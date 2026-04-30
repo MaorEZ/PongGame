@@ -147,21 +147,30 @@ document.getElementById('playAIBtn').addEventListener('click', () => {
     requestRoomList();
     startRoomPolling();
     // Open the practice picker automatically
-    setTimeout(() => {
-        const picker = document.getElementById('rbPracticePicker');
-        if (picker) picker.style.display = 'block';
-    }, 150);
+    setTimeout(() => openPracticePicker(), 150);
 });
 
 // === Room Browser Practice vs AI (inline, no modal) ===
 
+function openPracticePicker() {
+    document.getElementById('rbPracticeBtn').style.display = 'none';
+    document.getElementById('rbPracticePicker').style.display = 'block';
+    document.querySelectorAll('.rb-pmode-btn').forEach(b => b.classList.remove('selected'));
+}
+
+function closePracticePicker() {
+    document.getElementById('rbPracticePicker').style.display = 'none';
+    document.getElementById('rbPracticeBtn').style.display = '';
+}
+
 document.getElementById('rbPracticeBtn').addEventListener('click', () => {
     hapticFeedback('light');
-    const picker = document.getElementById('rbPracticePicker');
-    const isOpen = picker.style.display !== 'none';
-    picker.style.display = isOpen ? 'none' : 'block';
-    // Reset selections
-    document.querySelectorAll('.rb-pmode-btn').forEach(b => b.classList.remove('selected'));
+    openPracticePicker();
+});
+
+document.getElementById('rbPracticeClose').addEventListener('click', () => {
+    hapticFeedback('light');
+    closePracticePicker();
 });
 
 document.querySelectorAll('.rb-pmode-btn').forEach(btn => {
@@ -170,8 +179,7 @@ document.querySelectorAll('.rb-pmode-btn').forEach(btn => {
         document.querySelectorAll('.rb-pmode-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         selectedGameMode = btn.dataset.pmode;
-        // Close picker and start AI game
-        document.getElementById('rbPracticePicker').style.display = 'none';
+        closePracticePicker();
         stopRoomPolling();
         startAIGame();
     });

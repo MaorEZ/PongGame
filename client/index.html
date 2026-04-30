@@ -442,8 +442,9 @@
         <div id="myRoomSlot" class="rb-my-room"></div>
         <div id="roomList" class="rb-list"></div>
 
-        <!-- Practice vs AI strip (inline, no modal) -->
+        <!-- Practice vs AI section -->
         <div class="rb-practice-zone" id="rbPracticeZone">
+            <!-- Strip (shown by default) -->
             <button class="rb-practice-strip" id="rbPracticeBtn">
                 <div>
                     <span class="rb-practice-tag">NO MONEY</span>
@@ -451,8 +452,12 @@
                 </div>
                 <span class="rb-practice-arr">→</span>
             </button>
+            <!-- Mode picker (replaces strip when opened) -->
             <div class="rb-practice-picker" id="rbPracticePicker" style="display:none;">
-                <div class="rb-section-label" style="padding:10px 0 8px;">▸ PICK MODE</div>
+                <div class="rb-practice-picker-header">
+                    <span class="rb-section-label" style="margin:0;">▸ PICK MODE</span>
+                    <button class="rb-practice-close" id="rbPracticeClose">✕</button>
+                </div>
                 <div class="rb-mode-grid">
                     <button class="rb-mode-btn rb-pmode-btn" data-pmode="classic">
                         <div class="rb-mode-name">CLASSIC</div>
