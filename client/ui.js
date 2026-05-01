@@ -2756,4 +2756,17 @@ function animateHeroPaddles() {
     tick();
 }
 
-setTimeout(animateHeroPaddles, 150);
+// Restart hero animation whenever mainMenu becomes active
+(function() {
+    const menuEl = document.getElementById('mainMenu');
+    if (!menuEl) return;
+    new MutationObserver(() => {
+        if (menuEl.classList.contains('active') && !heroPaddleAnimId) {
+            animateHeroPaddles();
+        }
+    }).observe(menuEl, { attributes: true, attributeFilter: ['class'] });
+    // Also run now in case already active (e.g. dev reload)
+    if (menuEl.classList.contains('active')) {
+        setTimeout(animateHeroPaddles, 100);
+    }
+})();

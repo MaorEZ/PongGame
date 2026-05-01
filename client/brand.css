@@ -1631,13 +1631,17 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 }
 .prac-question {
   font-family: var(--disp-f);
-  font-size: 42px;
+  font-size: 40px;
   font-weight: 800;
   font-style: italic;
   letter-spacing: -0.04em;
-  line-height: 0.9;
+  line-height: 0.88;
   color: var(--ink);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+}
+.prac-question em {
+  color: var(--red);
+  font-style: italic;
 }
 .prac-sub {
   font-family: var(--mono-f);
@@ -1646,66 +1650,71 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   color: var(--mute);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .prac-choices {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 0;
+  margin-bottom: 16px;
+  border: 1.5px solid var(--ink);
+  overflow: hidden;
 }
+/* CLASSIC — bone (white) card */
 .prac-choice {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 16px;
-  border: 1.5px solid var(--ink);
-  background: var(--bone);
+  padding: 22px 18px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.08s;
+  transition: opacity 0.08s;
   width: 100%;
+  border: none;
 }
+.prac-classic {
+  background: var(--bone);
+  border-bottom: 1.5px solid var(--ink);
+}
+.prac-classic .prac-choice-name  { color: var(--ink); }
+.prac-classic .prac-choice-desc  { color: var(--mute); }
+.prac-classic .prac-choice-arrow { color: var(--ink); }
+
+/* CHAOTIC — permanently ink (black) card */
+.prac-chaotic {
+  background: var(--ink);
+}
+.prac-chaotic .prac-choice-name  { color: var(--bone); }
+.prac-chaotic .prac-choice-desc  { color: var(--mute-2); }
+.prac-chaotic .prac-choice-arrow { color: var(--red); }
+
+.prac-choice:active { opacity: 0.75; }
+
 .prac-choice-left {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .prac-choice-name {
   font-family: var(--disp-f);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
-  color: var(--ink);
 }
 .prac-choice-desc {
   font-family: var(--mono-f);
   font-size: 9.5px;
-  color: var(--mute);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .prac-choice-arrow {
   font-family: var(--disp-f);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
-  color: var(--ink);
   font-style: italic;
   flex-shrink: 0;
 }
-.prac-classic:active,
-.prac-classic:hover  { background: var(--acid) !important; }
-.prac-classic:active .prac-choice-name,
-.prac-classic:hover  .prac-choice-name { color: var(--ink) !important; }
-.prac-chaotic:active,
-.prac-chaotic:hover  { background: var(--red) !important; }
-.prac-chaotic:active .prac-choice-name,
-.prac-chaotic:hover  .prac-choice-name,
-.prac-chaotic:active .prac-choice-desc,
-.prac-chaotic:hover  .prac-choice-desc,
-.prac-chaotic:active .prac-choice-arrow,
-.prac-chaotic:hover  .prac-choice-arrow { color: var(--bone) !important; }
 .prac-note {
   font-family: var(--mono-f);
   font-size: 9px;
