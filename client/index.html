@@ -327,34 +327,76 @@
     <!-- Practice Screen -->
     <div id="practiceScreen" class="screen">
         <div class="gam-status-bar">
-            <span>ARENA / PRACTICE</span>
-            <span style="color:var(--acid);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em;">FREE</span>
+            <span>PRACTICE / FREE PLAY</span>
+            <span style="color:var(--mute);font-family:var(--mono-f);font-size:9.5px;font-weight:600;letter-spacing:0.1em;">NO MONEY · NO ELO</span>
         </div>
         <div class="rb-backbar">
             <button class="rb-back-btn" id="backFromPractice">← BACK</button>
             <span class="rb-screen-title">PRACTICE VS AI</span>
             <span></span>
         </div>
-        <div class="prac-content">
-            <div class="prac-question">HOW <em>WEIRD</em><br>DO YOU<br>WANT IT?</div>
-            <div class="prac-sub">▸ TAP A MODE TO PLAY INSTANTLY</div>
-            <div class="prac-choices">
-                <button class="prac-choice prac-classic practice-mode-btn" data-practice-mode="classic">
-                    <div class="prac-choice-left">
-                        <span class="prac-choice-name">CLASSIC</span>
-                        <span class="prac-choice-desc">pure skill · no power-ups</span>
+        <div class="prac-label-section">
+            <div class="prac-sparring-label">▸ PICK YOUR SPARRING PARTNER</div>
+            <div class="prac-question">How weird do you<br>want it<span class="prac-question-mark">?</span></div>
+        </div>
+        <div class="prac-cards">
+            <!-- CLASSIC -->
+            <button class="prac-card prac-classic practice-mode-btn" data-practice-mode="classic">
+                <div class="prac-card-top">
+                    <div class="prac-card-main">
+                        <div class="prac-chips">
+                            <span class="prac-chip prac-chip-ink">RECOMMENDED</span>
+                        </div>
+                        <div class="prac-card-title">CLASSIC.</div>
+                        <div class="prac-card-sub">PURE PADDLE · NO TRICKS</div>
                     </div>
-                    <span class="prac-choice-arrow">→</span>
-                </button>
-                <button class="prac-choice prac-chaotic practice-mode-btn" data-practice-mode="chaotic">
-                    <div class="prac-choice-left">
-                        <span class="prac-choice-name">CHAOTIC</span>
-                        <span class="prac-choice-desc">power-ups · wild cards</span>
+                    <div class="prac-card-arrow prac-arrow-ink">→</div>
+                </div>
+                <div class="prac-preview prac-preview-classic">
+                    <svg class="prac-preview-svg" viewBox="0 0 320 78" preserveAspectRatio="none">
+                        <line x1="160" y1="6" x2="160" y2="72" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0.3"/>
+                        <rect x="14" y="28" width="4" height="22" fill="var(--ink)"/>
+                        <rect x="302" y="28" width="4" height="22" fill="var(--red)"/>
+                        <circle cx="180" cy="40" r="3.5" fill="var(--ink)"/>
+                    </svg>
+                    <div class="prac-preview-label">▸ STANDARD ARENA · 1 BALL · STRAIGHT PHYSICS</div>
+                </div>
+            </button>
+            <!-- CHAOTIC -->
+            <button class="prac-card prac-chaotic practice-mode-btn" data-practice-mode="chaotic">
+                <div class="prac-card-top">
+                    <div class="prac-card-main">
+                        <div class="prac-chips">
+                            <span class="prac-chip prac-chip-red">▸ UNHINGED</span>
+                            <span class="prac-chip prac-chip-bone">BUFFS · CURSES</span>
+                        </div>
+                        <div class="prac-card-title">CHAOTIC<span class="prac-chaotic-dot">.</span></div>
+                        <div class="prac-card-sub">POWER-UPS · MULTIBALLS · SHRINK</div>
                     </div>
-                    <span class="prac-choice-arrow">→</span>
-                </button>
-            </div>
-            <div class="prac-note">NO MONEY · PURE PRACTICE · FREE</div>
+                    <div class="prac-card-arrow prac-arrow-red">→</div>
+                </div>
+                <div class="prac-preview prac-preview-chaotic">
+                    <svg class="prac-preview-svg" viewBox="0 0 320 78" preserveAspectRatio="none">
+                        <rect x="14" y="22" width="4" height="14" fill="var(--bone)"/>
+                        <rect x="14" y="48" width="4" height="14" fill="var(--bone)"/>
+                        <rect x="302" y="32" width="4" height="30" fill="var(--red)"/>
+                        <circle cx="100" cy="20" r="3.5" fill="var(--acid)"/>
+                        <circle cx="160" cy="50" r="3.5" fill="var(--bone)"/>
+                        <circle cx="220" cy="34" r="3.5" fill="var(--red)"/>
+                        <circle cx="80" cy="62" r="3.5" fill="var(--gold)"/>
+                        <rect x="140" y="10" width="10" height="10" fill="none" stroke="var(--acid)" stroke-width="1.5"/>
+                        <rect x="195" y="60" width="10" height="10" fill="none" stroke="var(--red)" stroke-width="1.5"/>
+                        <text x="143" y="19" font-family="var(--mono-f)" font-size="9" fill="var(--acid)" font-weight="700">+</text>
+                        <text x="198" y="69" font-family="var(--mono-f)" font-size="9" fill="var(--red)" font-weight="700">×</text>
+                        <line x1="0" y1="14" x2="320" y2="14" stroke="var(--red)" stroke-width="0.5" opacity="0.3" stroke-dasharray="2 6"/>
+                        <line x1="0" y1="68" x2="320" y2="68" stroke="var(--acid)" stroke-width="0.5" opacity="0.3" stroke-dasharray="2 6"/>
+                    </svg>
+                    <div class="prac-preview-label">▸ NO RULES · 4 MODIFIERS · DON'T BLAME US</div>
+                </div>
+            </button>
+        </div>
+        <div class="prac-footer">
+            <div class="prac-footer-text">▸ FREE PLAY · STATS DON'T COUNT · WARM UP YOUR HANDS</div>
         </div>
         <!-- hidden legacy button kept for any JS that checks it -->
         <button id="startPracticeBtn" style="display:none;"></button>
@@ -497,23 +539,31 @@
                 <div class="mc-vs-pot">POT <span class="mc-vs-pot-amt" id="mcWager">$20</span></div>
             </div>
 
-            <div class="mc-vs-players">
-                <div class="mc-vs-player mc-vs-p1">
-                    <div class="mc-avatar mc-p1" id="mcPlayer1Avatar">P1</div>
-                    <div class="mc-name" id="mcPlayer1Name">Player 1</div>
-                    <div class="mc-elo" id="mcPlayer1Elo"></div>
+            <div class="mc-vs-main">
+                <div class="mc-vs-players">
+                    <div class="mc-vs-player mc-vs-p1">
+                        <div class="mc-avatar mc-p1" id="mcPlayer1Avatar">P1</div>
+                        <div class="mc-name" id="mcPlayer1Name">Player 1</div>
+                        <div class="mc-elo" id="mcPlayer1Elo"></div>
+                    </div>
+                    <div class="mc-vs-word">VS</div>
+                    <div class="mc-vs-player mc-vs-p2">
+                        <div class="mc-avatar mc-p2" id="mcPlayer2Avatar">P2</div>
+                        <div class="mc-name" id="mcPlayer2Name">Player 2</div>
+                        <div class="mc-elo" id="mcPlayer2Elo"></div>
+                    </div>
                 </div>
-                <div class="mc-vs-word">VS</div>
-                <div class="mc-vs-player mc-vs-p2">
-                    <div class="mc-avatar mc-p2" id="mcPlayer2Avatar">P2</div>
-                    <div class="mc-name" id="mcPlayer2Name">Player 2</div>
-                    <div class="mc-elo" id="mcPlayer2Elo"></div>
-                </div>
+
+                <div class="mc-vs-countdown" id="mcCountdownNum">10</div>
+                <div class="mc-vs-noback">▸ NO BACKING OUT</div>
+                <div class="mc-status" id="mcStatus" style="display:none;"></div>
             </div>
 
-            <div class="mc-vs-countdown" id="mcCountdownNum">10</div>
-            <div class="mc-vs-noback">▸ NO BACKING OUT</div>
-            <div class="mc-status" id="mcStatus">Get ready...</div>
+            <!-- Provably fair card pinned to bottom -->
+            <div class="mc-proof-card">
+                <div class="mc-proof-label">▸ PROVABLY FAIR · SEED COMMITTED</div>
+                <div class="mc-proof-hash" id="mcProofHash">0x4f1c·9bd2·a8e4·…71c0</div>
+            </div>
 
             <!-- keep the ring SVG for JS compat but hide it -->
             <svg style="display:none">
@@ -587,6 +637,32 @@
         <div class="dep-bottom-bar">
             <button class="btn btn-primary" id="confirmDepositBtn" style="width:100%">CONFIRM · DEPOSIT $100</button>
             <div class="dep-bottom-note">CREDITED IN ~12 SECONDS · ONCHAIN</div>
+        </div>
+    </div>
+
+    <!-- Create Room Confirm Overlay -->
+    <div id="createRoomConfirm" style="display:none; position:fixed; inset:0; background:rgba(10,10,10,0.82); z-index:8000; align-items:flex-end; justify-content:center;">
+        <div class="crc-sheet">
+            <div class="crc-header">
+                <div class="crc-eyebrow">▸ CONFIRM ROOM</div>
+                <button class="crc-close" id="crcCancelBtn">✕</button>
+            </div>
+            <div class="crc-row">
+                <span class="crc-lbl">MODE</span>
+                <span class="crc-val" id="crcMode">CLASSIC</span>
+            </div>
+            <div class="crc-row">
+                <span class="crc-lbl">STAKE</span>
+                <span class="crc-val crc-val-big" id="crcStake">$10</span>
+            </div>
+            <div class="crc-row">
+                <span class="crc-lbl">WIN UP TO</span>
+                <span class="crc-val" style="color:var(--acid)" id="crcWin">$19</span>
+            </div>
+            <div class="crc-divider"></div>
+            <div class="crc-note">Your stake is held until the match settles · 5% platform fee</div>
+            <button class="crc-confirm-btn" id="crcConfirmBtn">OPEN ROOM · <span id="crcConfirmAmt">$10</span></button>
+            <button class="crc-cancel-txt" id="crcCancelTxtBtn">CANCEL</button>
         </div>
     </div>
 

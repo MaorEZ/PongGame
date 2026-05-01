@@ -287,7 +287,7 @@ document.getElementById('backFromCreateRoom').addEventListener('click', () => {
     showScreen('roomBrowserScreen');
 });
 
-// Create Room button — inline create at selected stake, no extra screen
+// Create Room button — show confirm sheet first
 document.getElementById('createRoomBtn').addEventListener('click', () => {
     hapticFeedback('medium');
     if (activeRoom) {
@@ -301,6 +301,23 @@ document.getElementById('createRoomBtn').addEventListener('click', () => {
         return;
     }
     const mode = selectedGameMode || 'classic';
+    // Populate confirm sheet
+    const el = id => document.getElementById(id);
+    el('crcMode').textContent    = mode.toUpperCase();
+    el('crcStake').textContent   = '$' + betAmt;
+    el('crcWin').textContent     = '$' + Math.round(betAmt * 1.9);
+    el('crcConfirmAmt').textContent = '$' + betAmt;
+    const overlay = el('createRoomConfirm');
+    overlay.style.display = 'flex';
+    overlay.classList.add('active-overlay');
+});
+
+function doCreateRoom() {
+    const overlay = document.getElementById('createRoomConfirm');
+    overlay.style.display = 'none';
+    overlay.classList.remove('active-overlay');
+    const betAmt = selectedBetAmount || selectedBudget || 10;
+    const mode = selectedGameMode || 'classic';
     const roomId = 'R' + Date.now().toString(36);
     activeRoom = { id: roomId, mode, amount: betAmt, playerName: AppState.user.name };
     updateBalance(AppState.user.balance - betAmt);
@@ -308,6 +325,19 @@ document.getElementById('createRoomBtn').addEventListener('click', () => {
     requestRoomList();
     updateRoomBrowser([{ id: roomId, playerName: AppState.user.name, mode, amount: betAmt, playerId: AppState.user.id, isSelf: true }]);
     showNotification('Room created! Waiting for opponent...');
+    hapticFeedback('medium');
+}
+
+document.getElementById('crcConfirmBtn').addEventListener('click', () => { doCreateRoom(); });
+document.getElementById('crcCancelBtn').addEventListener('click', () => {
+    const overlay = document.getElementById('createRoomConfirm');
+    overlay.style.display = 'none';
+    overlay.classList.remove('active-overlay');
+});
+document.getElementById('crcCancelTxtBtn').addEventListener('click', () => {
+    const overlay = document.getElementById('createRoomConfirm');
+    overlay.style.display = 'none';
+    overlay.classList.remove('active-overlay');
 });
 
 // Create Room amount selection
@@ -2769,4 +2799,16 @@ function animateHeroPaddles() {
     if (menuEl.classList.contains('active')) {
         setTimeout(animateHeroPaddles, 100);
     }
+})();
+
+// Match countdown — turn red when n <= 1, show "GO" style
+(function() {
+    const cdEl = document.getElementById('mcCountdownNum');
+    if (!cdEl) return;
+    function updateUrgency() {
+        const txt = cdEl.textContent.trim();
+        const n = parseInt(txt, 10);
+        cdEl.classList.toggle('urgent', (!isNaN(n) && n <= 1) || txt === 'GO');
+    }
+    new MutationObserver(updateUrgency).observe(cdEl, { childList: true, characterData: true, subtree: true });
 })();
