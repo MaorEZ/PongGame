@@ -2466,13 +2466,14 @@ function drawCustomPaddle(paddle, defaultColor, skin) {
             break;
         }
         default: {
-            // Brand paddle — solid color with glow
+            // Brand paddle — solid rectangle with glow
             Game.ctx.shadowColor = defaultColor;
             Game.ctx.shadowBlur = 20;
-            drawCapsule(Game.ctx, paddle.x, paddle.y, paddle.width, paddle.height, defaultColor);
-            // Subtle highlight
-            drawCapsule(Game.ctx, paddle.x + 4, paddle.y + 2, paddle.width - 8, Math.floor(paddle.height / 3), 'rgba(255, 255, 255, 0.22)');
+            Game.ctx.fillStyle = defaultColor;
+            Game.ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
             Game.ctx.shadowBlur = 0;
+            Game.ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+            Game.ctx.fillRect(paddle.x + 4, paddle.y + 2, paddle.width - 8, Math.floor(paddle.height / 3));
             break;
         }
     }
@@ -2531,72 +2532,37 @@ function drawCustomPaddle(paddle, defaultColor, skin) {
     Game.ctx.restore();
 }
 
-// Draw ball with speed-based heat glow indicator
+// Draw ball — bone color (#f4efe6) with white glow
 function drawBall() {
-    // Draw trail
     drawBallTrail();
 
-    // Calculate speed ratio for heat indicator
-    const spd = Math.sqrt(Game.ball.speedX * Game.ball.speedX + Game.ball.speedY * Game.ball.speedY);
-    const maxSpd = Game.gameMode === 'chaotic' ? 18 : 14;
-    const heat = Math.min(1, spd / maxSpd);
-
-    // Ball radius (oscillates in chaotic mode)
     let radius = Game.ball.radius;
     if (Game.gameMode === 'chaotic') {
         radius = Game.ball.radius + Math.sin(Game.chaotic.ballSizePhase) * 2;
-        // Mega boost: ball grows 60% bigger
         if (Game.chaotic.activeBoost && Game.chaotic.activeBoost.type.id === 'mega') {
             radius *= 1.6;
         }
     }
 
-    // Check if ghost boost is active
     const isGhost = Game.gameMode === 'chaotic' && Game.chaotic.activeBoost && Game.chaotic.activeBoost.type.id === 'ghost';
     const ghostAlpha = isGhost ? 0.3 + Math.sin(Date.now() * 0.008) * 0.15 : 1;
 
-    // Heat color: white -> yellow -> orange -> red
-    let r = 255;
-    let g = Math.round(255 - heat * 180);
-    let b = Math.round(255 - heat * 230);
-
-    if (isGhost) {
-        // Ghost ball: eerie cyan tint
-        r = 100; g = 220; b = 255;
-    }
-
-    const ballColor = isGhost
-        ? `rgba(${r}, ${g}, ${b}, ${ghostAlpha})`
-        : `rgb(${r}, ${g}, ${b})`;
-
-    // Outer glow color matches heat (or ghostly cyan)
-    const glowColor = isGhost ? `rgba(100, 220, 255, ${ghostAlpha})` :
-                      heat < 0.3 ? '#ffffff' :
-                      heat < 0.6 ? '#ffcc44' :
-                      heat < 0.8 ? '#ff8800' : '#ff3300';
-
-    // Draw ball
-    if (isGhost) {
-        Game.ctx.globalAlpha = ghostAlpha;
-    }
-    Game.ctx.shadowColor = glowColor;
-    Game.ctx.shadowBlur = isGhost ? 25 : 15 + heat * 20;
-    Game.ctx.fillStyle = ballColor;
+    if (isGhost) Game.ctx.globalAlpha = ghostAlpha;
+    Game.ctx.shadowColor = isGhost ? 'rgba(100, 220, 255, 0.8)' : 'rgba(255, 255, 255, 0.7)';
+    Game.ctx.shadowBlur = isGhost ? 25 : 18;
+    Game.ctx.fillStyle = isGhost ? `rgba(100, 220, 255, ${ghostAlpha})` : '#f4efe6';
     Game.ctx.beginPath();
     Game.ctx.arc(Game.ball.x, Game.ball.y, radius, 0, Math.PI * 2);
     Game.ctx.fill();
 
-    // Inner bright core
     Game.ctx.fillStyle = isGhost
         ? `rgba(180, 240, 255, ${ghostAlpha * 0.5})`
-        : `rgba(255, 255, 255, ${0.6 + heat * 0.2})`;
+        : 'rgba(255, 255, 255, 0.75)';
     Game.ctx.beginPath();
     Game.ctx.arc(Game.ball.x, Game.ball.y, radius * 0.4, 0, Math.PI * 2);
     Game.ctx.fill();
     Game.ctx.shadowBlur = 0;
-    if (isGhost) {
-        Game.ctx.globalAlpha = 1;
-    }
+    if (isGhost) Game.ctx.globalAlpha = 1;
 }
 
 // Draw ball trail effect
@@ -2619,7 +2585,7 @@ function drawBallTrail() {
 
         Game.ctx.fillStyle = isGhost
             ? `rgba(100, 220, 255, ${alpha})`
-            : `rgba(255, 255, 255, ${alpha})`;
+            : `rgba(244, 239, 230, ${alpha})`;
         Game.ctx.beginPath();
         Game.ctx.arc(Game.ball.trail[i].x, Game.ball.trail[i].y, radius, 0, Math.PI * 2);
         Game.ctx.fill();

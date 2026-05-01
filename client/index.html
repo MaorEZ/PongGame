@@ -335,23 +335,29 @@
             <span class="rb-screen-title">PRACTICE VS AI</span>
             <span></span>
         </div>
-        <div class="rb-section" style="flex:1; border-bottom:none;">
-            <div class="rb-section-label">▸ PICK MODE</div>
-            <div class="rb-mode-grid">
-                <button class="rb-mode-btn practice-mode-btn selected" data-practice-mode="classic">
-                    <div class="rb-mode-name">CLASSIC</div>
-                    <div class="rb-mode-desc">pure skill</div>
+        <div class="prac-content">
+            <div class="prac-question">HOW WEIRD<br>DO YOU<br>WANT IT?</div>
+            <div class="prac-sub">▸ TAP TO PLAY INSTANTLY</div>
+            <div class="prac-choices">
+                <button class="prac-choice prac-classic practice-mode-btn" data-practice-mode="classic">
+                    <div class="prac-choice-left">
+                        <span class="prac-choice-name">CLASSIC</span>
+                        <span class="prac-choice-desc">pure skill · no power-ups</span>
+                    </div>
+                    <span class="prac-choice-arrow">→</span>
                 </button>
-                <button class="rb-mode-btn practice-mode-btn" data-practice-mode="chaotic">
-                    <div class="rb-mode-name">CHAOTIC</div>
-                    <div class="rb-mode-desc">power-ups</div>
+                <button class="prac-choice prac-chaotic practice-mode-btn" data-practice-mode="chaotic">
+                    <div class="prac-choice-left">
+                        <span class="prac-choice-name">CHAOTIC</span>
+                        <span class="prac-choice-desc">power-ups · wild cards</span>
+                    </div>
+                    <span class="prac-choice-arrow">→</span>
                 </button>
             </div>
+            <div class="prac-note">NO MONEY · PURE PRACTICE · FREE</div>
         </div>
-        <div class="rb-bottom">
-            <button class="rb-create-btn" id="startPracticeBtn" style="background:var(--acid)!important;color:var(--ink)!important;letter-spacing:0.1em;">START PRACTICE →</button>
-            <div style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-align:center;margin-top:8px;text-transform:uppercase;">NO MONEY · PURE PRACTICE</div>
-        </div>
+        <!-- hidden legacy button kept for any JS that checks it -->
+        <button id="startPracticeBtn" style="display:none;"></button>
     </div>
 
     <!-- Play Mode Select Screen -->
@@ -692,17 +698,23 @@
         <div class="game-container">
             <!-- Game Info Bar -->
             <div class="game-info-bar">
-                <div class="game-player">
-                    <span id="player1Name">Player 1</span>
-                    <span class="score" id="player1Score">0</span>
+                <div class="gib-side gib-p1-side">
+                    <div class="gib-avatar gib-av-acid" id="gibP1Avatar">Y</div>
+                    <div class="gib-pinfo">
+                        <span class="gib-name" id="player1Name">YOU</span>
+                        <span class="gib-score" id="player1Score">0</span>
+                    </div>
                 </div>
-                <div class="game-round">
-                    <div>Round <span id="currentRound">1</span> of 3</div>
-                    <div class="game-timer">⏱️ <span id="gameTimer">40s</span></div>
+                <div class="gib-center">
+                    <div class="gib-round-label">RND <span id="currentRound">1</span>/3</div>
+                    <div class="gib-timer" id="gameTimer">40s</div>
                 </div>
-                <div class="game-player">
-                    <span class="score" id="player2Score">0</span>
-                    <span id="player2Name">Player 2</span>
+                <div class="gib-side gib-p2-side">
+                    <div class="gib-pinfo gib-pinfo-r">
+                        <span class="gib-score" id="player2Score">0</span>
+                        <span class="gib-name gib-name-r" id="player2Name">OPP</span>
+                    </div>
+                    <div class="gib-avatar gib-av-red" id="gibP2Avatar">AI</div>
                 </div>
             </div>
 
@@ -754,6 +766,7 @@
                 <button class="emoji-btn" data-emoji="🔥">🔥</button>
             </div>
             <button id="reportMatchBtn"></button>
+            <button id="doubleOrNothingBtn">2X ⚡ · $<span id="doubleOrNothingAmount">0</span></button>
         </div>
 
         <!-- Double offer banner (game.js shows this overlay) -->
@@ -774,28 +787,43 @@
                 <span id="amountWon" class="rs-amount">+$19.00</span>
             </div>
 
-            <!-- Clip card (decorative) -->
-            <div class="rs-clip-card">
-                <div class="rs-clip-header">
-                    <span class="rs-clip-label">▸ HIGHLIGHT CLIP</span>
-                    <span class="rs-clip-dur">0:08</span>
+            <!-- Win Ticket (trade receipt) -->
+            <div class="rs-ticket">
+                <div class="rs-ticket-header">
+                    <div class="rs-ticket-brand">GOAGAINSTME.</div>
+                    <div class="rs-ticket-tag-chip">▸ MATCH RECEIPT</div>
                 </div>
-                <div class="rs-clip-field">
-                    <div class="rs-clip-paddle rs-cp-l"></div>
-                    <div class="rs-clip-paddle rs-cp-r"></div>
-                    <div class="rs-clip-ball"></div>
-                    <div class="rs-clip-trail rs-ct-1"></div>
-                    <div class="rs-clip-trail rs-ct-2"></div>
-                    <div class="rs-clip-score-row">
-                        <span class="rs-clip-score">YOU</span>
-                        <span class="rs-clip-score">OPP</span>
+                <div class="rs-ticket-body">
+                    <div class="rs-ticket-row">
+                        <span class="rs-ticket-field">OUTCOME</span>
+                        <span class="rs-ticket-val rs-ticket-outcome" id="rtOutcome">—</span>
                     </div>
-                    <div class="rs-clip-play-btn">▶</div>
+                    <div class="rs-ticket-row">
+                        <span class="rs-ticket-field">P&amp;L</span>
+                        <span class="rs-ticket-val rs-ticket-pnl" id="rtPnl">—</span>
+                    </div>
+                    <div class="rs-ticket-row">
+                        <span class="rs-ticket-field">OPPONENT</span>
+                        <span class="rs-ticket-val rs-ticket-mono" id="rtOpponent">—</span>
+                    </div>
+                    <div class="rs-ticket-row">
+                        <span class="rs-ticket-field">DATE</span>
+                        <span class="rs-ticket-val rs-ticket-mono" id="rtDate">—</span>
+                    </div>
+                    <div class="rs-ticket-row">
+                        <span class="rs-ticket-field">MATCH ID</span>
+                        <span class="rs-ticket-val rs-ticket-mono" id="rtMatch">—</span>
+                    </div>
                 </div>
-                <div class="rs-clip-btns">
-                    <button class="rs-share-btn">↗ SEND TO TELEGRAM</button>
-                    <button class="rs-save-btn">SAVE .MP4</button>
+                <div class="rs-ticket-qr-row">
+                    <canvas class="rs-ticket-qr" id="rtQRCanvas" width="72" height="72"></canvas>
+                    <div class="rs-ticket-qr-info">
+                        <div class="rs-ticket-qr-label">SCAN TO PLAY</div>
+                        <div class="rs-ticket-qr-sub">t.me/goagainstme_bot</div>
+                        <button class="rs-ticket-pdf-btn" id="savePdfBtn">↓ SAVE PDF</button>
+                    </div>
                 </div>
+                <div class="rs-ticket-foot">✓ VERIFIED · ON-CHAIN MATCH</div>
             </div>
 
             <!-- Stats row -->
@@ -821,7 +849,7 @@
             <div id="rematchSection" style="display:none">
                 <div class="rs-action-row">
                     <button class="rs-rematch-btn" id="rematchBtn">RUN IT BACK ↻ <span id="rematchCountdown" style="opacity:0.7;">10</span>s</button>
-                    <button class="rs-double-btn" id="doubleOrNothingBtn" style="display:none;">2X ⚡ · $<span id="doubleOrNothingAmount">0</span></button>
+                    <button class="rs-double-btn" id="rs2xBtn">2X ⚡</button>
                 </div>
             </div>
             <button class="rs-back-btn" id="backToMenuBtn">BACK TO ARENA →</button>

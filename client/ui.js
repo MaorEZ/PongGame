@@ -921,27 +921,18 @@ document.getElementById('cancelAIModeBtn').addEventListener('click', () => {
     document.getElementById('aiModeModal').classList.remove('active');
 });
 
-// === Practice Screen ===
-let selectedPracticeMode = 'classic';
-
+// === Practice Screen — tap a mode card to go directly to game ===
 document.querySelectorAll('.practice-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        hapticFeedback('light');
-        document.querySelectorAll('.practice-mode-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selectedPracticeMode = btn.dataset.practiceMode;
+        hapticFeedback('medium');
+        selectedGameMode = btn.dataset.practiceMode;
+        startAIGame();
     });
 });
 
 document.getElementById('backFromPractice').addEventListener('click', () => {
     hapticFeedback('light');
     hidePracticeModal();
-});
-
-document.getElementById('startPracticeBtn').addEventListener('click', () => {
-    hapticFeedback('medium');
-    selectedGameMode = selectedPracticeMode;
-    startAIGame();
 });
 
 // Preset Bet Amount Selection
@@ -2538,12 +2529,231 @@ function initResultObservers() {
     const eloRow = document.getElementById('eloChangeRow');
     if (eloRow) {
         new MutationObserver(() => {
-            // When game.js hides eloChangeRow, show neutral --- in stat
             if (eloRow.style.display === 'none') {
                 if (rsEloVal) rsEloVal.textContent = '---';
             }
         }).observe(eloRow, { attributes: true, attributeFilter: ['style'] });
     }
+
+    // Win ticket: mirror result data to ticket fields
+    function updateTicket() {
+        const rawTitle = titleEl ? titleEl.textContent.trim() : '';
+        const isWin  = rawTitle === 'W.' || rawTitle === 'You Won!';
+        const isDraw = rawTitle === 'DRAW.' || rawTitle === 'Draw!';
+
+        const rtOutcome = document.getElementById('rtOutcome');
+        const rtPnl     = document.getElementById('rtPnl');
+        const rtOpp     = document.getElementById('rtOpponent');
+        const rtDate    = document.getElementById('rtDate');
+        const rtMatch   = document.getElementById('rtMatch');
+
+        if (rtOutcome) {
+            rtOutcome.textContent = isWin ? 'W.' : isDraw ? 'DRAW.' : 'L.';
+            rtOutcome.style.color = isWin ? 'var(--acid)' : isDraw ? 'var(--mute-2)' : 'var(--red)';
+        }
+
+        // P&L from #amountWon
+        const amtEl = document.getElementById('amountWon');
+        if (rtPnl && amtEl) rtPnl.textContent = amtEl.textContent || '—';
+
+        // Opponent from #resultOpponent
+        const oppEl = document.getElementById('resultOpponent');
+        if (rtOpp && oppEl) rtOpp.textContent = oppEl.textContent || '—';
+
+        // Date
+        if (rtDate) rtDate.textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        // Match ID from #resultMatchId
+        const matchEl = document.getElementById('resultMatchId');
+        if (rtMatch && matchEl) rtMatch.textContent = matchEl.textContent || '—';
+    }
+
+    if (titleEl) {
+        new MutationObserver(updateTicket).observe(titleEl, { childList: true, subtree: true, characterData: true });
+    }
+    // Also observe amountWon, resultOpponent
+    ['amountWon', 'resultOpponent'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) new MutationObserver(updateTicket).observe(el, { childList: true, subtree: true, characterData: true });
+    });
+
+    // QR placeholder on result screen show
+    function drawResultQR() {
+        const canvas = document.getElementById('rtQRCanvas');
+        if (!canvas) return;
+        drawQRPlaceholder(canvas, 'https://t.me/goagainstme_bot');
+    }
+
+    // Draw QR whenever resultScreen becomes active
+    const resultScreen = document.getElementById('resultScreen');
+    if (resultScreen) {
+        new MutationObserver(() => {
+            if (resultScreen.classList.contains('active')) {
+                updateTicket();
+                drawResultQR();
+            }
+        }).observe(resultScreen, { attributes: true, attributeFilter: ['class'] });
+    }
 }
 
+// Draw a minimal QR-like pattern (finder-pattern only, cosmetic)
+function drawQRPlaceholder(canvas, _url) {
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;
+    const cells = 21;
+    const cell = size / cells;
+
+    ctx.fillStyle = '#f4efe6';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#0a0a0a';
+
+    function drawFinder(ox, oy) {
+        // 7x7 finder pattern
+        ctx.fillRect(ox * cell, oy * cell, 7 * cell, 7 * cell);
+        ctx.fillStyle = '#f4efe6';
+        ctx.fillRect((ox + 1) * cell, (oy + 1) * cell, 5 * cell, 5 * cell);
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect((ox + 2) * cell, (oy + 2) * cell, 3 * cell, 3 * cell);
+    }
+
+    drawFinder(0, 0);
+    drawFinder(14, 0);
+    drawFinder(0, 14);
+
+    // Random-ish data modules to fill the rest
+    const rng = (() => { let s = 42; return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; }; })();
+    for (let r = 0; r < cells; r++) {
+        for (let c = 0; c < cells; c++) {
+            const inFinder = (r < 8 && c < 8) || (r < 8 && c > 12) || (r > 12 && c < 8);
+            if (!inFinder && rng() > 0.5) {
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(c * cell, r * cell, cell, cell);
+            }
+        }
+    }
+}
+
+// PDF save (browser print dialog)
+document.getElementById('savePdfBtn').addEventListener('click', () => {
+    hapticFeedback('light');
+    window.print();
+});
+
 initResultObservers();
+
+// === Game HUD avatar observers — update initials when player names change ===
+function initHudAvatarObservers() {
+    const p1NameEl = document.getElementById('player1Name');
+    const p2NameEl = document.getElementById('player2Name');
+    const p1Av     = document.getElementById('gibP1Avatar');
+    const p2Av     = document.getElementById('gibP2Avatar');
+
+    function setAvatars() {
+        if (p1NameEl && p1Av) {
+            const n = p1NameEl.textContent.trim();
+            p1Av.textContent = n ? n.charAt(0).toUpperCase() : 'Y';
+        }
+        if (p2NameEl && p2Av) {
+            const n = p2NameEl.textContent.trim();
+            p2Av.textContent = n ? getInitials(n) : 'AI';
+        }
+    }
+
+    if (p1NameEl) new MutationObserver(setAvatars).observe(p1NameEl, { childList: true, subtree: true, characterData: true });
+    if (p2NameEl) new MutationObserver(setAvatars).observe(p2NameEl, { childList: true, subtree: true, characterData: true });
+    setAvatars();
+}
+initHudAvatarObservers();
+
+// === Hero card paddle animation (DOM elements) ===
+// Paddles are on left/right walls, moving vertically. Ball bounces between them.
+let heroPaddleAnimId = null;
+
+function animateHeroPaddles() {
+    if (heroPaddleAnimId) cancelAnimationFrame(heroPaddleAnimId);
+
+    const preview = document.querySelector('.gam-paddle-preview');
+    if (!preview) return;
+
+    const paddleL = preview.querySelector('.gam-paddle-l');
+    const paddleR = preview.querySelector('.gam-paddle-r');
+    const ball    = preview.querySelector('.gam-ball-dot');
+    if (!paddleL || !paddleR || !ball) return;
+
+    const W = preview.offsetWidth || 320;
+    const H = 64;
+    const PW = 6, PH = 30, BR = 4; // ball radius
+
+    let bx = W / 2, by = H / 2;
+    let bvx = 1.5, bvy = 0.8;
+    let ly = (H - PH) / 2, lyv = 0;
+    let ry = (H - PH) / 2, ryv = 0;
+
+    function tick() {
+        const mainMenu = document.getElementById('mainMenu');
+        if (!mainMenu || !mainMenu.classList.contains('active')) {
+            heroPaddleAnimId = null;
+            return;
+        }
+
+        bx += bvx; by += bvy;
+
+        // Top / bottom wall bounce
+        if (by < BR)     { by = BR;     bvy =  Math.abs(bvy); }
+        if (by > H - BR) { by = H - BR; bvy = -Math.abs(bvy); }
+
+        const lPX = 14, rPX = W - 14 - PW;
+
+        // Left paddle hit
+        if (bx - BR < lPX + PW && bvx < 0 && by > ly && by < ly + PH) {
+            bvx = Math.abs(bvx);
+            bvy += (by - (ly + PH / 2)) * 0.05;
+        }
+        // Right paddle hit
+        if (bx + BR > rPX && bvx > 0 && by > ry && by < ry + PH) {
+            bvx = -Math.abs(bvx);
+            bvy += (by - (ry + PH / 2)) * 0.05;
+        }
+
+        // Clamp speed to moderate pace
+        const spd = Math.sqrt(bvx * bvx + bvy * bvy);
+        if (spd > 2.6) { bvx *= 2.6 / spd; bvy *= 2.6 / spd; }
+
+        // Reset when ball leaves
+        if (bx < -BR || bx > W + BR) {
+            bx = W / 2; by = H / 2;
+            bvx = (Math.random() > 0.5 ? 1.4 : -1.4);
+            bvy = (Math.random() - 0.5) * 1.4;
+        }
+
+        // Paddle AI — track ball y, more reactive when ball approaches
+        const lReact = bvx < 0 ? 0.07 : 0.018;
+        lyv += (by - PH / 2 - ly) * lReact;
+        lyv *= 0.78;
+        ly = Math.max(0, Math.min(H - PH, ly + lyv));
+
+        const rReact = bvx > 0 ? 0.06 : 0.015;
+        ryv += (by - PH / 2 - ry) * rReact;
+        ryv *= 0.80;
+        ry = Math.max(0, Math.min(H - PH, ry + ryv));
+
+        // Apply to DOM
+        paddleL.style.left      = lPX + 'px';
+        paddleL.style.top       = ly + 'px';
+        paddleL.style.transform = 'none';
+
+        paddleR.style.right     = '14px';
+        paddleR.style.left      = 'auto';
+        paddleR.style.top       = ry + 'px';
+        paddleR.style.transform = 'none';
+
+        ball.style.left      = (bx - BR) + 'px';
+        ball.style.top       = (by - BR) + 'px';
+        ball.style.transform = 'none';
+
+        heroPaddleAnimId = requestAnimationFrame(tick);
+    }
+    tick();
+}
+
+setTimeout(animateHeroPaddles, 150);
