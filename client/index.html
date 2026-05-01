@@ -324,32 +324,33 @@
         </div>
     </div>
 
-    <!-- Practice Modal (bottom sheet overlay) -->
-    <div id="practiceScreen">
-        <div class="practice-panel">
-            <div class="rb-backbar">
-                <button class="rb-back-btn" id="backFromPractice">← BACK</button>
-                <span class="rb-screen-title">PRACTICE VS AI</span>
-                <span style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-transform:uppercase">FREE</span>
+    <!-- Practice Screen -->
+    <div id="practiceScreen" class="screen">
+        <div class="gam-status-bar">
+            <span>ARENA / PRACTICE</span>
+            <span style="color:var(--acid);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em;">FREE</span>
+        </div>
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromPractice">← BACK</button>
+            <span class="rb-screen-title">PRACTICE VS AI</span>
+            <span></span>
+        </div>
+        <div class="rb-section" style="flex:1; border-bottom:none;">
+            <div class="rb-section-label">▸ PICK MODE</div>
+            <div class="rb-mode-grid">
+                <button class="rb-mode-btn practice-mode-btn selected" data-practice-mode="classic">
+                    <div class="rb-mode-name">CLASSIC</div>
+                    <div class="rb-mode-desc">pure skill</div>
+                </button>
+                <button class="rb-mode-btn practice-mode-btn" data-practice-mode="chaotic">
+                    <div class="rb-mode-name">CHAOTIC</div>
+                    <div class="rb-mode-desc">power-ups</div>
+                </button>
             </div>
-
-            <div class="rb-section">
-                <div class="rb-section-label">▸ MODE</div>
-                <div class="rb-mode-grid">
-                    <button class="rb-mode-btn practice-mode-btn selected" data-practice-mode="classic">
-                        <div class="rb-mode-name">CLASSIC</div>
-                        <div class="rb-mode-desc">pure skill</div>
-                    </button>
-                    <button class="rb-mode-btn practice-mode-btn" data-practice-mode="chaotic">
-                        <div class="rb-mode-name">CHAOTIC</div>
-                        <div class="rb-mode-desc">power-ups</div>
-                    </button>
-                </div>
-            </div>
-
-            <div class="rb-bottom">
-                <button class="rb-create-btn" id="startPracticeBtn" style="background:var(--acid)!important;color:var(--ink)!important;letter-spacing:0.1em">START PRACTICE →</button>
-            </div>
+        </div>
+        <div class="rb-bottom">
+            <button class="rb-create-btn" id="startPracticeBtn" style="background:var(--acid)!important;color:var(--ink)!important;letter-spacing:0.1em;">START PRACTICE →</button>
+            <div style="font-family:var(--mono-f);font-size:9px;color:var(--mute);letter-spacing:0.14em;text-align:center;margin-top:8px;text-transform:uppercase;">NO MONEY · PURE PRACTICE</div>
         </div>
     </div>
 
@@ -729,78 +730,102 @@
 
     <!-- Result Screen -->
     <div id="resultScreen" class="screen">
-        <div class="container">
-            <div class="result-content">
-                <h2 id="resultTitle">You Won!</h2>
-                <p id="resultOpponent" style="display:none; font-size:13px; color:#888; margin-top:4px;"></p>
-                <div class="result-amount">
-                    <span class="amount-won" id="amountWon">+19.00</span>
-                    <span class="currency" id="resultCurrencyLabel">USDT</span>
-                </div>
+        <!-- Status bar -->
+        <div class="gam-status-bar">
+            <span>RESULT · ROOM <span id="rsRoomNum">---</span></span>
+            <span style="color:var(--acid);font-weight:700;letter-spacing:0.1em;">● SETTLED</span>
+        </div>
 
-                <!-- AI-only streak row -->
-                <div id="aiStreakRow" style="display:none; margin: 4px 0 12px;">
-                    <span id="aiStreakVal" style="font-family:var(--disp-f,inherit);font-size:1.1rem;font-weight:800;color:#f59e0b;margin-right:6px;"></span>
-                    <span style="font-size:0.85rem;color:#888;">STREAK</span>
-                </div>
+        <!-- Off-screen compat dump — game.js reads/writes these, observers mirror to new design -->
+        <div style="position:absolute;left:-9999px;top:-9999px;pointer-events:none;" aria-hidden="true">
+            <span id="resultTitle">You Won!</span>
+            <span id="resultOpponent"></span>
+            <span id="resultCurrencyLabel">USDT</span>
+            <span id="newBalance">0.00</span>
+            <div id="resultBalanceRow"></div>
+            <div id="aiStreakRow"><span id="aiStreakVal"></span></div>
+            <div id="eloChangeRow"><span id="eloChangeText"></span><span id="eloNewText"></span></div>
+            <div id="resultProofRow"></div>
+            <div id="fairnessResult"><div id="fairnessIcon"></div><div id="fairnessDetails"></div></div>
+            <div id="emojiSection">
+                <div id="emojiReceived"></div>
+                <button class="emoji-btn" data-emoji="GG">GG</button>
+                <button class="emoji-btn" data-emoji="😤">😤</button>
+                <button class="emoji-btn" data-emoji="🔥">🔥</button>
+            </div>
+            <button id="reportMatchBtn"></button>
+        </div>
 
-                <div class="result-details">
-                    <p>Final Score: <span id="finalScore">3-1</span></p>
-                    <p id="resultProofRow" style="font-size:12px;color:#666;">
-                        Proof ID: <span id="resultMatchId" style="font-family:monospace;color:#4fd1c5;cursor:pointer;" title="Tap to copy">---</span>
-                    </p>
-                    <p id="resultBalanceRow">New Balance: <span id="newBalance">19.00</span> USDT</p>
-                    <p class="elo-change-row" id="eloChangeRow" style="display:none;">
-                        ELO: <span id="eloChangeText"></span> → <span id="eloNewText"></span>
-                    </p>
-                </div>
+        <!-- Double offer banner (game.js shows this overlay) -->
+        <div id="doubleOfferBanner" style="display:none; position:absolute; top:30px; left:0; right:0; z-index:50; background:var(--ink); border-bottom:1.5px solid var(--gold); padding:12px 16px; text-align:center;">
+            <p id="doubleOfferText" style="font-family:var(--mono-f);font-size:12px;color:var(--bone);margin-bottom:8px;letter-spacing:0.06em;"></p>
+            <div style="display:flex;gap:8px;justify-content:center;">
+                <button id="doubleAcceptBtn" style="flex:1;padding:8px;background:var(--gold);border:none;font-family:var(--mono-f);font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;">Accept</button>
+                <button id="doubleDeclineBtn" style="flex:1;padding:8px;background:transparent;border:1px solid var(--mute);color:var(--bone);font-family:var(--mono-f);font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;">Decline</button>
+            </div>
+        </div>
 
-                <!-- Post-match emoji reactions -->
-                <div id="emojiSection" style="display:none; margin:16px 0;">
-                    <p style="font-size:12px; color:#888; margin-bottom:8px;">Send a reaction</p>
-                    <div style="display:flex; gap:12px; justify-content:center;">
-                        <button class="emoji-btn" data-emoji="GG" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">GG</button>
-                        <button class="emoji-btn" data-emoji="😤" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">😤</button>
-                        <button class="emoji-btn" data-emoji="🔥" style="font-size:22px; background:rgba(255,255,255,0.08); border:none; border-radius:10px; padding:10px 16px; cursor:pointer;">🔥</button>
+        <!-- Scrollable content -->
+        <div class="rs-scroll">
+            <!-- Outcome + big title + amount -->
+            <div class="rs-head">
+                <div class="rs-outcome-tag" id="rsOutcomeTag">▸ YOU TOOK IT</div>
+                <div class="rs-big-title win" id="rsBigTitle">W.</div>
+                <span id="amountWon" class="rs-amount">+$19.00</span>
+            </div>
+
+            <!-- Clip card (decorative) -->
+            <div class="rs-clip-card">
+                <div class="rs-clip-header">
+                    <span class="rs-clip-label">▸ HIGHLIGHT CLIP</span>
+                    <span class="rs-clip-dur">0:08</span>
+                </div>
+                <div class="rs-clip-field">
+                    <div class="rs-clip-paddle rs-cp-l"></div>
+                    <div class="rs-clip-paddle rs-cp-r"></div>
+                    <div class="rs-clip-ball"></div>
+                    <div class="rs-clip-trail rs-ct-1"></div>
+                    <div class="rs-clip-trail rs-ct-2"></div>
+                    <div class="rs-clip-score-row">
+                        <span class="rs-clip-score">YOU</span>
+                        <span class="rs-clip-score">OPP</span>
                     </div>
-                    <div id="emojiReceived" style="display:none; font-size:40px; margin-top:12px; animation: fadeIn 0.3s ease;"></div>
+                    <div class="rs-clip-play-btn">▶</div>
                 </div>
-
-                <div class="rematch-section" id="rematchSection">
-                    <button class="btn btn-primary" id="rematchBtn">
-                        🔄 Rematch (<span id="rematchCountdown">10</span>s)
-                    </button>
-                    <button class="btn btn-secondary" id="doubleOrNothingBtn" style="display:none; margin-top:8px; background: linear-gradient(135deg,#f59e0b,#ef4444);">
-                        ⚡ Double or Nothing ($<span id="doubleOrNothingAmount">0</span>)
-                    </button>
-                    <p class="info-text">Challenge same opponent</p>
-                </div>
-
-                <!-- Double-or-nothing incoming offer banner -->
-                <div id="doubleOfferBanner" style="display:none; background:rgba(245,158,11,0.15); border:1px solid #f59e0b; border-radius:10px; padding:12px; margin-top:12px; text-align:center;">
-                    <p id="doubleOfferText" style="font-size:13px; margin-bottom:8px;"></p>
-                    <div style="display:flex; gap:8px; justify-content:center;">
-                        <button class="btn btn-primary" id="doubleAcceptBtn" style="flex:1;">Accept</button>
-                        <button class="btn btn-secondary" id="doubleDeclineBtn" style="flex:1;">Decline</button>
-                    </div>
-                </div>
-
-                <button class="btn btn-secondary" id="backToMenuBtn">
-                    Back to Menu
-                </button>
-
-                <button class="btn btn-tertiary" id="reportMatchBtn">
-                    🚩 Report Issue
-                </button>
-
-                <div id="fairnessResult" style="display:none; margin-top:16px; padding:12px; background:rgba(255,255,255,0.05); border-radius:10px; text-align:left;">
-                    <div id="fairnessIcon" style="font-weight:700; font-size:14px; margin-bottom:8px; text-align:center;"></div>
-                    <div id="fairnessDetails" style="font-size:11px; color:#aaa;"></div>
-                    <div style="font-size:10px; color:#666; margin-top:6px; text-align:center;">
-                        SHA-256(seed + secret) = commitment
-                    </div>
+                <div class="rs-clip-btns">
+                    <button class="rs-share-btn">↗ SEND TO TELEGRAM</button>
+                    <button class="rs-save-btn">SAVE .MP4</button>
                 </div>
             </div>
+
+            <!-- Stats row -->
+            <div class="rs-stats-row">
+                <div class="rs-stat-card">
+                    <div class="rs-stat-lbl">SCORE</div>
+                    <div class="rs-stat-val" id="finalScore">---</div>
+                </div>
+                <div class="rs-stat-card">
+                    <div class="rs-stat-lbl">ELO</div>
+                    <div class="rs-stat-val rs-stat-red" id="rsEloVal">---</div>
+                </div>
+                <div class="rs-stat-card">
+                    <div class="rs-stat-lbl">STREAK</div>
+                    <div class="rs-stat-val" id="rsStreakVal">---</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action area (fixed bottom) -->
+        <div class="rs-actions">
+            <!-- rematchSection shown/hidden by game.js -->
+            <div id="rematchSection" style="display:none">
+                <div class="rs-action-row">
+                    <button class="rs-rematch-btn" id="rematchBtn">RUN IT BACK ↻ <span id="rematchCountdown" style="opacity:0.7;">10</span>s</button>
+                    <button class="rs-double-btn" id="doubleOrNothingBtn" style="display:none;">2X ⚡ · $<span id="doubleOrNothingAmount">0</span></button>
+                </div>
+            </div>
+            <button class="rs-back-btn" id="backToMenuBtn">BACK TO ARENA →</button>
+            <div class="rs-proof-line">PROOF · <span id="resultMatchId">0x---·----·----</span> · ✓ VERIFIED</div>
         </div>
     </div>
 

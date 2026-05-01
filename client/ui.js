@@ -10,12 +10,21 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-// Practice modal helpers (bottom-sheet overlay, not a screen)
+// Practice screen helpers — full-screen navigation
+let practiceReturnScreen = 'mainMenu';
 function showPracticeModal() {
-    document.getElementById('practiceScreen').classList.add('open');
+    // Remember which screen to go back to
+    const screens = ['mainMenu', 'roomBrowserScreen'];
+    for (const id of screens) {
+        if (document.getElementById(id) && document.getElementById(id).classList.contains('active')) {
+            practiceReturnScreen = id;
+            break;
+        }
+    }
+    showScreen('practiceScreen');
 }
 function hidePracticeModal() {
-    document.getElementById('practiceScreen').classList.remove('open');
+    showScreen(practiceReturnScreen);
 }
 
 // Global state for selected bet amount and game mode
@@ -932,7 +941,6 @@ document.getElementById('backFromPractice').addEventListener('click', () => {
 document.getElementById('startPracticeBtn').addEventListener('click', () => {
     hapticFeedback('medium');
     selectedGameMode = selectedPracticeMode;
-    hidePracticeModal();
     startAIGame();
 });
 
@@ -2469,3 +2477,73 @@ document.querySelectorAll('.wdw-amt-btn').forEach(btn => {
 document.getElementById('withdrawAddress').addEventListener('input', () => {
     updateWithdrawState();
 });
+
+// === Result Screen: Bridge old IDs → new design elements via MutationObserver ===
+function initResultObservers() {
+    // resultTitle → rsBigTitle + rsOutcomeTag
+    const titleEl = document.getElementById('resultTitle');
+    const bigTitle = document.getElementById('rsBigTitle');
+    const outcomeTag = document.getElementById('rsOutcomeTag');
+
+    function applyResultTitle() {
+        if (!titleEl || !bigTitle) return;
+        const raw = titleEl.textContent.trim();
+        let display, tag, cls;
+
+        if (raw === 'W.' || raw === 'You Won!') {
+            display = 'W.'; tag = '▸ YOU TOOK IT'; cls = 'win';
+        } else if (raw === 'L.' || raw === 'You Lost') {
+            display = 'L.'; tag = '▸ YOU GOT COOKED'; cls = 'lose';
+        } else if (raw === 'DRAW.' || raw === 'Draw!') {
+            display = 'DRAW.'; tag = '▸ DEAD HEAT'; cls = 'draw';
+        } else {
+            display = raw; tag = '▸ RESULT'; cls = '';
+        }
+
+        if (bigTitle.textContent !== display) bigTitle.textContent = display;
+        bigTitle.className = 'rs-big-title' + (cls ? ' ' + cls : '');
+        if (outcomeTag) {
+            outcomeTag.textContent = tag;
+            outcomeTag.className = 'rs-outcome-tag' + (cls === 'lose' || cls === 'draw' ? ' ' + cls : '');
+        }
+    }
+
+    if (titleEl) {
+        new MutationObserver(applyResultTitle).observe(titleEl, { childList: true, subtree: true, characterData: true });
+        applyResultTitle();
+    }
+
+    // eloChangeText → rsEloVal (parse "+18" from "1820 (+18)")
+    const eloTextEl = document.getElementById('eloChangeText');
+    const rsEloVal = document.getElementById('rsEloVal');
+    if (eloTextEl && rsEloVal) {
+        new MutationObserver(() => {
+            const raw = eloTextEl.textContent;
+            const m = raw.match(/([+-]\d+)/);
+            rsEloVal.textContent = m ? m[1] : (raw || '---');
+        }).observe(eloTextEl, { childList: true, subtree: true, characterData: true });
+    }
+
+    // aiStreakVal → rsStreakVal
+    const streakEl = document.getElementById('aiStreakVal');
+    const rsStreak = document.getElementById('rsStreakVal');
+    if (streakEl && rsStreak) {
+        new MutationObserver(() => {
+            const v = streakEl.textContent.trim();
+            rsStreak.textContent = v ? '×' + v + ' 🔥' : '---';
+        }).observe(streakEl, { childList: true, subtree: true, characterData: true });
+    }
+
+    // eloChangeRow visibility → show/hide rsEloVal card via parent
+    const eloRow = document.getElementById('eloChangeRow');
+    if (eloRow) {
+        new MutationObserver(() => {
+            // When game.js hides eloChangeRow, show neutral --- in stat
+            if (eloRow.style.display === 'none') {
+                if (rsEloVal) rsEloVal.textContent = '---';
+            }
+        }).observe(eloRow, { attributes: true, attributeFilter: ['style'] });
+    }
+}
+
+initResultObservers();

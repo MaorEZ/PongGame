@@ -2094,8 +2094,8 @@ function gameLoop() {
 
     try {
         drawBackground();
-        drawCustomPaddle(Game.paddle1, '#4fd1c5', Game.paddleSkin);
-        drawCustomPaddle(Game.paddle2, '#10b981', 'default');
+        drawCustomPaddle(Game.paddle1, '#c8ff00', Game.paddleSkin);
+        drawCustomPaddle(Game.paddle2, '#ff2e1f', 'default');
         drawChaoticVisuals();
         drawParticles();
         drawBall();
@@ -2138,16 +2138,12 @@ function drawBackground() {
     const h = Game.canvas.height;
     const now = Date.now();
 
-    // Dark gradient background (brightened)
-    const bgGrad = Game.ctx.createLinearGradient(0, 0, 0, h);
-    bgGrad.addColorStop(0, '#131a24');
-    bgGrad.addColorStop(0.5, '#1a2535');
-    bgGrad.addColorStop(1, '#131a24');
-    Game.ctx.fillStyle = bgGrad;
+    // Ink-dark background
+    Game.ctx.fillStyle = '#0a0a0a';
     Game.ctx.fillRect(0, 0, w, h);
 
-    // Grid pattern (more visible)
-    Game.ctx.strokeStyle = 'rgba(79, 209, 197, 0.08)';
+    // Grid pattern (subtle bone)
+    Game.ctx.strokeStyle = 'rgba(244, 239, 230, 0.04)';
     Game.ctx.lineWidth = 1;
     const gridSize = 40;
     for (let x = 0; x < w; x += gridSize) {
@@ -2178,14 +2174,14 @@ function drawBackground() {
         if (p.y > h) p.y = 0;
 
         const twinkle = Math.sin(now / 1000 + p.x) * 0.15;
-        Game.ctx.fillStyle = `rgba(79, 209, 197, ${p.alpha + twinkle})`;
+        Game.ctx.fillStyle = `rgba(244, 239, 230, ${p.alpha + twinkle})`;
         Game.ctx.beginPath();
         Game.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         Game.ctx.fill();
     }
 
-    // Center line (dashed, subtle glow)
-    Game.ctx.strokeStyle = 'rgba(79, 209, 197, 0.25)';
+    // Center line (dashed, subtle bone)
+    Game.ctx.strokeStyle = 'rgba(244, 239, 230, 0.2)';
     Game.ctx.lineWidth = 1;
     Game.ctx.setLineDash([8, 8]);
     Game.ctx.beginPath();
@@ -2195,7 +2191,7 @@ function drawBackground() {
     Game.ctx.setLineDash([]);
 
     // Side accent lines
-    Game.ctx.strokeStyle = 'rgba(79, 209, 197, 0.15)';
+    Game.ctx.strokeStyle = 'rgba(244, 239, 230, 0.08)';
     Game.ctx.lineWidth = 2;
     Game.ctx.beginPath();
     Game.ctx.moveTo(0, 0);
@@ -2470,23 +2466,12 @@ function drawCustomPaddle(paddle, defaultColor, skin) {
             break;
         }
         default: {
-            // Basic paddle - pearl white capsule with subtle glow
-            const pearlGrad = Game.ctx.createLinearGradient(paddle.x, paddle.y, paddle.x + paddle.width, paddle.y);
-            pearlGrad.addColorStop(0, '#d4c5b0');
-            pearlGrad.addColorStop(0.3, '#ede4d8');
-            pearlGrad.addColorStop(0.5, '#f5efe8');
-            pearlGrad.addColorStop(0.7, '#ede4d8');
-            pearlGrad.addColorStop(1, '#d4c5b0');
-
-            Game.ctx.shadowColor = '#e8ddd0';
-            Game.ctx.shadowBlur = 12;
-            drawCapsule(Game.ctx, paddle.x, paddle.y, paddle.width, paddle.height, 'transparent');
-            Game.ctx.fillStyle = pearlGrad;
-            Game.ctx.fill();
-
-            // Subtle pearl highlight
-            drawCapsule(Game.ctx, paddle.x + 5, paddle.y + 2, paddle.width - 10, paddle.height / 3, 'rgba(255, 255, 255, 0.2)');
-
+            // Brand paddle — solid color with glow
+            Game.ctx.shadowColor = defaultColor;
+            Game.ctx.shadowBlur = 20;
+            drawCapsule(Game.ctx, paddle.x, paddle.y, paddle.width, paddle.height, defaultColor);
+            // Subtle highlight
+            drawCapsule(Game.ctx, paddle.x + 4, paddle.y + 2, paddle.width - 8, Math.floor(paddle.height / 3), 'rgba(255, 255, 255, 0.22)');
             Game.ctx.shadowBlur = 0;
             break;
         }
