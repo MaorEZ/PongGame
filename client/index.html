@@ -353,12 +353,10 @@
                     <div class="prac-card-arrow prac-arrow-ink">→</div>
                 </div>
                 <div class="prac-preview prac-preview-classic">
-                    <svg class="prac-preview-svg" viewBox="0 0 320 78" preserveAspectRatio="none">
-                        <line x1="160" y1="6" x2="160" y2="72" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 3" opacity="0.3"/>
-                        <rect x="14" y="28" width="4" height="22" fill="var(--ink)"/>
-                        <rect x="302" y="28" width="4" height="22" fill="var(--red)"/>
-                        <circle cx="180" cy="40" r="3.5" fill="var(--ink)"/>
-                    </svg>
+                    <div class="prac-midline"></div>
+                    <div class="prac-pp prac-pp-l"></div>
+                    <div class="prac-pp prac-pp-r"></div>
+                    <div class="prac-pb prac-pb-classic"></div>
                     <div class="prac-preview-label">▸ STANDARD ARENA · 1 BALL · STRAIGHT PHYSICS</div>
                 </div>
             </button>
@@ -376,21 +374,12 @@
                     <div class="prac-card-arrow prac-arrow-red">→</div>
                 </div>
                 <div class="prac-preview prac-preview-chaotic">
-                    <svg class="prac-preview-svg" viewBox="0 0 320 78" preserveAspectRatio="none">
-                        <rect x="14" y="22" width="4" height="14" fill="var(--bone)"/>
-                        <rect x="14" y="48" width="4" height="14" fill="var(--bone)"/>
-                        <rect x="302" y="32" width="4" height="30" fill="var(--red)"/>
-                        <circle cx="100" cy="20" r="3.5" fill="var(--acid)"/>
-                        <circle cx="160" cy="50" r="3.5" fill="var(--bone)"/>
-                        <circle cx="220" cy="34" r="3.5" fill="var(--red)"/>
-                        <circle cx="80" cy="62" r="3.5" fill="var(--gold)"/>
-                        <rect x="140" y="10" width="10" height="10" fill="none" stroke="var(--acid)" stroke-width="1.5"/>
-                        <rect x="195" y="60" width="10" height="10" fill="none" stroke="var(--red)" stroke-width="1.5"/>
-                        <text x="143" y="19" font-family="var(--mono-f)" font-size="9" fill="var(--acid)" font-weight="700">+</text>
-                        <text x="198" y="69" font-family="var(--mono-f)" font-size="9" fill="var(--red)" font-weight="700">×</text>
-                        <line x1="0" y1="14" x2="320" y2="14" stroke="var(--red)" stroke-width="0.5" opacity="0.3" stroke-dasharray="2 6"/>
-                        <line x1="0" y1="68" x2="320" y2="68" stroke="var(--acid)" stroke-width="0.5" opacity="0.3" stroke-dasharray="2 6"/>
-                    </svg>
+                    <div class="prac-pp prac-pp-l prac-pp-ch-l"></div>
+                    <div class="prac-pp prac-pp-r prac-pp-ch-r"></div>
+                    <div class="prac-pb prac-pb-chaotic"></div>
+                    <div class="prac-pu prac-pu-acid" style="display:none">+</div>
+                    <div class="prac-pu prac-pu-red"  style="display:none">×</div>
+                    <div class="prac-pu prac-pu-gold" style="display:none">★</div>
                     <div class="prac-preview-label">▸ NO RULES · 4 MODIFIERS · DON'T BLAME US</div>
                 </div>
             </button>
@@ -863,8 +852,9 @@
                 <span id="amountWon" class="rs-amount">+$19.00</span>
             </div>
 
-            <!-- Win Ticket (trade receipt) -->
-            <div class="rs-ticket">
+            <!-- Win Ticket (trade receipt) — wrapped for print isolation -->
+            <div class="rs-ticket-print-area">
+            <div class="rs-ticket" id="rsTicketCard">
                 <div class="rs-ticket-header">
                     <div class="rs-ticket-brand">GOAGAINSTME.</div>
                     <div class="rs-ticket-tag-chip">▸ MATCH RECEIPT</div>
@@ -873,6 +863,10 @@
                     <div class="rs-ticket-row">
                         <span class="rs-ticket-field">OUTCOME</span>
                         <span class="rs-ticket-val rs-ticket-outcome" id="rtOutcome">—</span>
+                    </div>
+                    <div class="rs-ticket-row rs-ticket-row-amount">
+                        <span class="rs-ticket-field">AMOUNT</span>
+                        <span class="rs-ticket-val rs-ticket-amount" id="rtAmount">—</span>
                     </div>
                     <div class="rs-ticket-row">
                         <span class="rs-ticket-field">P&amp;L</span>
@@ -900,6 +894,7 @@
                     </div>
                 </div>
                 <div class="rs-ticket-foot">✓ VERIFIED · ON-CHAIN MATCH</div>
+            </div>
             </div>
 
             <!-- Stats row -->

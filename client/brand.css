@@ -1119,8 +1119,8 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 
 .mc-vs-screen {
   position: relative;
+  flex: 1;
   width: 100%;
-  height: 100%;
   overflow: hidden;
   background-image:
     linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
@@ -1212,9 +1212,9 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   padding: 0 4px;
 }
 .mc-avatar {
-  width: 80px; height: 80px;
+  width: 88px; height: 88px;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--disp-f); font-weight: 800; font-size: 26px;
+  font-family: var(--disp-f); font-weight: 800; font-size: 30px;
   border-radius: 0 !important;
   border: 1.5px solid var(--line) !important;
   margin: 0 auto 8px;
@@ -1240,10 +1240,10 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 
 .mc-vs-countdown {
   font-family: var(--disp-f);
-  font-size: 160px;
+  font-size: 168px;
   font-weight: 800;
   color: var(--bone);
-  line-height: 0.85;
+  line-height: 0.8;
   letter-spacing: -0.08em;
   text-align: center;
   transition: color 0.18s;
@@ -2087,6 +2087,7 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 }
 .rs-ticket-outcome { color: var(--acid); font-size: 18px; }
 .rs-ticket-pnl     { color: var(--acid); }
+.rs-ticket-amount  { font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
 .rs-ticket-qr-row {
   display: flex;
@@ -2367,4 +2368,144 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   letter-spacing: 0.1em;
   cursor: pointer;
   text-align: center;
+}
+
+/* ── ANIMATED PADDLE ELEMENTS (practice previews) ────────────── */
+.prac-pp {
+  position: absolute;
+  width: 4px;
+  height: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.prac-preview-classic .prac-pp-l  { background: var(--ink); left: 14px; }
+.prac-preview-classic .prac-pp-r  { background: var(--red); right: 14px; }
+.prac-preview-chaotic .prac-pp-ch-l { background: var(--bone); left: 14px; }
+.prac-preview-chaotic .prac-pp-ch-r { background: var(--red); right: 14px; }
+
+.prac-pb {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.prac-pb-classic  { background: var(--ink); }
+.prac-pb-chaotic  { background: var(--bone); box-shadow: 0 0 6px rgba(255,255,255,0.5); }
+
+.prac-midline {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(10,10,10,0.18);
+}
+
+.prac-pu {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono-f);
+  font-size: 9px;
+  font-weight: 700;
+}
+.prac-pu-acid { color: var(--acid); }
+.prac-pu-red  { color: var(--red); }
+.prac-pu-gold { color: var(--gold); }
+
+/* ── ROOM BROWSER — CHAOTIC DARK THEME ──────────────────────── */
+#roomBrowserScreen.rb-mode-chaotic {
+  background: #111 !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .gam-status-bar {
+  color: var(--mute-2) !important;
+  border-bottom-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-backbar {
+  border-bottom-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-back-btn,
+#roomBrowserScreen.rb-mode-chaotic .rb-screen-title {
+  color: var(--bone) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-section {
+  border-bottom-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-section-label,
+#roomBrowserScreen.rb-mode-chaotic .rb-rooms-header .rb-section-label {
+  color: var(--mute-2) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-mode-btn {
+  background: #1a1a16 !important;
+  border-color: var(--line) !important;
+  color: var(--bone) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-mode-btn.selected {
+  background: var(--ink-3) !important;
+  box-shadow: 4px 4px 0 var(--red) !important;
+  color: var(--bone) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-mode-name { color: inherit !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-stake-btn {
+  background: #1a1a16 !important;
+  border-color: var(--line) !important;
+  color: var(--bone) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-stake-btn.selected {
+  background: var(--red) !important;
+  color: var(--bone) !important;
+  border-color: var(--red) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-win-preview { color: var(--mute-2) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-list,
+#roomBrowserScreen.rb-mode-chaotic .rb-my-room {
+  background: #111 !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-card {
+  background: #1a1a16 !important;
+  border-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-card-name { color: var(--bone) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-card-meta { color: var(--mute-2) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-avatar { background: var(--ink-3) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-list-empty { color: var(--mute-2) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-list-empty svg { stroke: var(--mute) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-practice-zone {
+  background: #111 !important;
+  border-top-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-practice-strip {
+  background: #1a1a16 !important;
+  border-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-practice-tag,
+#roomBrowserScreen.rb-mode-chaotic .rb-practice-txt,
+#roomBrowserScreen.rb-mode-chaotic .rb-practice-arr { color: var(--bone) !important; }
+#roomBrowserScreen.rb-mode-chaotic .rb-bottom {
+  background: #111 !important;
+  border-top-color: var(--line) !important;
+}
+#roomBrowserScreen.rb-mode-chaotic .rb-create-btn {
+  background: var(--red) !important;
+}
+
+/* ── PDF PRINT — only show the win/loss ticket ───────────────── */
+@media print {
+  body > *:not(#resultScreen) { display: none !important; }
+  #resultScreen { display: block !important; position: static !important; height: auto !important; }
+  #resultScreen > *:not(.rs-ticket-print-area) { display: none !important; }
+  .rs-ticket-print-area { display: block !important; }
+  .rs-ticket {
+    border: 1.5px solid #000 !important;
+    background: #0a0a0a !important;
+    color: #f4efe6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .rs-ticket * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }

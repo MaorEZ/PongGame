@@ -202,6 +202,10 @@ function syncRoomBrowserUI() {
     if (createBtn) createBtn.textContent = '+ CREATE ROOM AT $' + stake;
     const winEl = document.getElementById('rbWinPreview');
     if (winEl) winEl.innerHTML = 'WIN <span style="color:var(--red);font-weight:700">$' + Math.round(stake * 1.9) + '</span>';
+
+    // Dark theme when chaotic is selected
+    const rbScreen = document.getElementById('roomBrowserScreen');
+    if (rbScreen) rbScreen.classList.toggle('rb-mode-chaotic', mode === 'chaotic');
 }
 
 // Only target the PvP mode toggle buttons (not the practice picker buttons)
@@ -482,13 +486,14 @@ function updateRoomBrowser(rooms) {
     myRoomSlot.innerHTML = '';
     roomList.innerHTML = '';
 
-    // Separate own room from others
+    // Separate own room from others; filter other rooms to current mode
+    const currentMode = selectedGameMode || 'classic';
     let myRoom = null;
     const otherRooms = [];
     rooms.forEach(room => {
         if (room.isSelf || room.playerId === AppState.user.id) {
             myRoom = room;
-        } else {
+        } else if (!room.mode || room.mode === currentMode) {
             otherRooms.push(room);
         }
     });
@@ -2586,6 +2591,15 @@ function initResultObservers() {
         const amtEl = document.getElementById('amountWon');
         if (rtPnl && amtEl) rtPnl.textContent = amtEl.textContent || '—';
 
+        // Amount row — colored by outcome
+        const rtAmount = document.getElementById('rtAmount');
+        if (rtAmount && amtEl) {
+            const rawAmt = amtEl.textContent || '—';
+            rtAmount.textContent = rawAmt;
+            rtAmount.style.color = isWin ? 'var(--acid)' : isDraw ? 'var(--mute-2)' : 'var(--red)';
+            rtAmount.style.fontWeight = '800';
+        }
+
         // Opponent from #resultOpponent
         const oppEl = document.getElementById('resultOpponent');
         if (rtOpp && oppEl) rtOpp.textContent = oppEl.textContent || '—';
@@ -2718,6 +2732,7 @@ function animateHeroPaddles() {
     let bvx = 1.5, bvy = 0.8;
     let ly = (H - PH) / 2, lyv = 0;
     let ry = (H - PH) / 2, ryv = 0;
+    let lPhase = 0, rPhase = Math.PI * 0.7; // different starting phases so paddles desync
 
     function tick() {
         const mainMenu = document.getElementById('mainMenu');
@@ -2756,14 +2771,19 @@ function animateHeroPaddles() {
             bvy = (Math.random() - 0.5) * 1.4;
         }
 
-        // Paddle AI — track ball y, more reactive when ball approaches
+        // Independent noise phases — each paddle drifts at its own frequency
+        lPhase += 0.017; rPhase += 0.025;
+        const lNoise = Math.sin(lPhase) * 5;
+        const rNoise = Math.sin(rPhase) * 7;
+
+        // Paddle AI — track ball y with independent noise offsets
         const lReact = bvx < 0 ? 0.07 : 0.018;
-        lyv += (by - PH / 2 - ly) * lReact;
+        lyv += (by - PH / 2 - ly + lNoise) * lReact;
         lyv *= 0.78;
         ly = Math.max(0, Math.min(H - PH, ly + lyv));
 
         const rReact = bvx > 0 ? 0.06 : 0.015;
-        ryv += (by - PH / 2 - ry) * rReact;
+        ryv += (by - PH / 2 - ry + rNoise) * rReact;
         ryv *= 0.80;
         ry = Math.max(0, Math.min(H - PH, ry + ryv));
 
@@ -2799,6 +2819,142 @@ function animateHeroPaddles() {
     if (menuEl.classList.contains('active')) {
         setTimeout(animateHeroPaddles, 100);
     }
+})();
+
+// === Practice preview paddle animations ===
+let pracAnimId = null;
+
+function animatePracticePreviews() {
+    if (pracAnimId) cancelAnimationFrame(pracAnimId);
+
+    // ── Classic preview ──────────────────────────────────────────
+    const classicPrev = document.querySelector('.prac-preview-classic');
+    const cL  = classicPrev && classicPrev.querySelector('.prac-pp-l');
+    const cR  = classicPrev && classicPrev.querySelector('.prac-pp-r');
+    const cB  = classicPrev && classicPrev.querySelector('.prac-pb');
+
+    // ── Chaotic preview ──────────────────────────────────────────
+    const chaoticPrev = document.querySelector('.prac-preview-chaotic');
+    const hL  = chaoticPrev && chaoticPrev.querySelector('.prac-pp-ch-l');
+    const hR  = chaoticPrev && chaoticPrev.querySelector('.prac-pp-ch-r');
+    const hB  = chaoticPrev && chaoticPrev.querySelector('.prac-pb');
+    const puAcid = chaoticPrev && chaoticPrev.querySelector('.prac-pu-acid');
+    const puRed  = chaoticPrev && chaoticPrev.querySelector('.prac-pu-red');
+    const puGold = chaoticPrev && chaoticPrev.querySelector('.prac-pu-gold');
+
+    const W = 260, H = 48, PW = 4, PH = 22, BR = 3.5;
+
+    // Classic state
+    let cbx = W * 0.4, cby = H / 2, cbvx = 1.4, cbvy = 0.6;
+    let cly = (H - PH) / 2, clyv = 0, cry = (H - PH) / 2, cryv = 0;
+    let clPh = 0, crPh = Math.PI * 0.65;
+
+    // Chaotic state — faster, more erratic
+    let hbx = W * 0.55, hby = H / 2, hbvx = -1.8, hbvy = 0.9;
+    let hly = (H - PH) / 2, hlyv = 0, hry = (H - PH) / 2, hryv = 0;
+    let hlPh = Math.PI * 0.3, hrPh = Math.PI * 1.1;
+    let puTimer = 0;
+    const pus = [puAcid, puRed, puGold].filter(Boolean);
+    let puIndex = 0;
+
+    function tick() {
+        const pracScreen = document.getElementById('practiceScreen');
+        if (!pracScreen || !pracScreen.classList.contains('active')) {
+            pracAnimId = null;
+            return;
+        }
+
+        // ── Classic bounce ──
+        cbx += cbvx; cby += cbvy;
+        if (cby < BR)     { cby = BR;     cbvy =  Math.abs(cbvy); }
+        if (cby > H - BR) { cby = H - BR; cbvy = -Math.abs(cbvy); }
+        if (cbx - BR < 14 + PW && cbvx < 0 && cby > cly && cby < cly + PH) {
+            cbvx = Math.abs(cbvx); cbvy += (cby - (cly + PH/2)) * 0.05;
+        }
+        if (cbx + BR > W - 14 && cbvx > 0 && cby > cry && cby < cry + PH) {
+            cbvx = -Math.abs(cbvx); cbvy += (cby - (cry + PH/2)) * 0.05;
+        }
+        const cSpd = Math.sqrt(cbvx*cbvx + cbvy*cbvy);
+        if (cSpd > 2.4) { cbvx *= 2.4/cSpd; cbvy *= 2.4/cSpd; }
+        if (cbx < -BR || cbx > W + BR) {
+            cbx = W/2; cby = H/2; cbvx = (Math.random() > 0.5 ? 1.3 : -1.3); cbvy = (Math.random()-0.5)*1.2;
+        }
+        clPh += 0.018; crPh += 0.027;
+        const clN = Math.sin(clPh) * 4, crN = Math.sin(crPh) * 6;
+        const clR = cbvx < 0 ? 0.08 : 0.02;
+        clyv += (cby - PH/2 - cly + clN) * clR; clyv *= 0.76;
+        cly = Math.max(0, Math.min(H - PH, cly + clyv));
+        const crR = cbvx > 0 ? 0.07 : 0.016;
+        cryv += (cby - PH/2 - cry + crN) * crR; cryv *= 0.78;
+        cry = Math.max(0, Math.min(H - PH, cry + cryv));
+
+        if (cL) { cL.style.left = '14px'; cL.style.top = cly + 'px'; cL.style.transform = 'none'; }
+        if (cR) { cR.style.right = '14px'; cR.style.left = 'auto'; cR.style.top = cry + 'px'; cR.style.transform = 'none'; }
+        if (cB) { cB.style.left = (cbx - BR) + 'px'; cB.style.top = (cby - BR) + 'px'; cB.style.transform = 'none'; }
+
+        // ── Chaotic bounce ──
+        hbx += hbvx; hby += hbvy;
+        if (hby < BR)     { hby = BR;     hbvy =  Math.abs(hbvy); }
+        if (hby > H - BR) { hby = H - BR; hbvy = -Math.abs(hbvy); }
+        if (hbx - BR < 14 + PW && hbvx < 0 && hby > hly && hby < hly + PH) {
+            hbvx = Math.abs(hbvx) * 1.05; hbvy += (hby - (hly + PH/2)) * 0.07;
+        }
+        if (hbx + BR > W - 14 && hbvx > 0 && hby > hry && hby < hry + PH) {
+            hbvx = -Math.abs(hbvx) * 1.05; hbvy += (hby - (hry + PH/2)) * 0.07;
+        }
+        const hSpd = Math.sqrt(hbvx*hbvx + hbvy*hbvy);
+        if (hSpd > 3.2) { hbvx *= 3.2/hSpd; hbvy *= 3.2/hSpd; }
+        if (hbx < -BR || hbx > W + BR) {
+            hbx = W/2; hby = H/2; hbvx = (Math.random() > 0.5 ? 1.8 : -1.8); hbvy = (Math.random()-0.5)*1.6;
+        }
+        hlPh += 0.022; hrPh += 0.031;
+        const hlN = Math.sin(hlPh) * 5, hrN = Math.sin(hrPh) * 7;
+        const hlR = hbvx < 0 ? 0.09 : 0.022;
+        hlyv += (hby - PH/2 - hly + hlN) * hlR; hlyv *= 0.75;
+        hly = Math.max(0, Math.min(H - PH, hly + hlyv));
+        const hrR = hbvx > 0 ? 0.08 : 0.018;
+        hryv += (hby - PH/2 - hry + hrN) * hrR; hryv *= 0.77;
+        hry = Math.max(0, Math.min(H - PH, hry + hryv));
+
+        if (hL) { hL.style.left = '14px'; hL.style.top = hly + 'px'; hL.style.transform = 'none'; }
+        if (hR) { hR.style.right = '14px'; hR.style.left = 'auto'; hR.style.top = hry + 'px'; hR.style.transform = 'none'; }
+        if (hB) { hB.style.left = (hbx - BR) + 'px'; hB.style.top = (hby - BR) + 'px'; hB.style.transform = 'none'; }
+
+        // ── Power-up cycling ──
+        puTimer++;
+        if (pus.length > 0 && puTimer % 80 === 0) {
+            pus.forEach(p => { p.style.display = 'none'; });
+            puIndex = (puIndex + 1) % pus.length;
+            const pu = pus[puIndex];
+            pu.style.left = (30 + Math.random() * (W - 60)) + 'px';
+            pu.style.top  = (6  + Math.random() * (H - 18)) + 'px';
+            pu.style.display = 'flex';
+            pu.style.opacity = '1';
+        }
+        if (pus.length > 0 && puTimer % 80 > 60) {
+            const visible = pus[puIndex];
+            if (visible && visible.style.display !== 'none') {
+                visible.style.opacity = String(1 - (puTimer % 80 - 60) / 20);
+            }
+        }
+
+        pracAnimId = requestAnimationFrame(tick);
+    }
+    tick();
+}
+
+// Start/stop practice animation with screen visibility
+(function() {
+    const pracEl = document.getElementById('practiceScreen');
+    if (!pracEl) return;
+    new MutationObserver(() => {
+        if (pracEl.classList.contains('active')) {
+            animatePracticePreviews();
+        } else if (pracAnimId) {
+            cancelAnimationFrame(pracAnimId);
+            pracAnimId = null;
+        }
+    }).observe(pracEl, { attributes: true, attributeFilter: ['class'] });
 })();
 
 // Match countdown — turn red when n <= 1, show "GO" style
