@@ -2589,14 +2589,22 @@ function initResultObservers() {
 
         // P&L from #amountWon
         const amtEl = document.getElementById('amountWon');
-        if (rtPnl && amtEl) rtPnl.textContent = amtEl.textContent || '—';
+        const rawAmt = amtEl ? amtEl.textContent || '' : '';
+        // Practice/no-wager games produce "+$--" or "-$--" — show $0 instead
+        const isPractice = rawAmt.includes('--') || rawAmt.includes('$0.00');
+        const amtDisplay = isPractice ? '$0' : rawAmt;
+        const amtColor   = isPractice ? 'var(--acid)' : isWin ? 'var(--acid)' : isDraw ? 'var(--mute-2)' : 'var(--red)';
+
+        if (rtPnl && amtEl) {
+            rtPnl.textContent = amtDisplay;
+            rtPnl.style.color = amtColor;
+        }
 
         // Amount row — colored by outcome
         const rtAmount = document.getElementById('rtAmount');
-        if (rtAmount && amtEl) {
-            const rawAmt = amtEl.textContent || '—';
-            rtAmount.textContent = rawAmt;
-            rtAmount.style.color = isWin ? 'var(--acid)' : isDraw ? 'var(--mute-2)' : 'var(--red)';
+        if (rtAmount) {
+            rtAmount.textContent = amtDisplay;
+            rtAmount.style.color = amtColor;
             rtAmount.style.fontWeight = '800';
         }
 
@@ -2842,15 +2850,18 @@ function animatePracticePreviews() {
     const puRed  = chaoticPrev && chaoticPrev.querySelector('.prac-pu-red');
     const puGold = chaoticPrev && chaoticPrev.querySelector('.prac-pu-gold');
 
-    const W = 260, H = 48, PW = 4, PH = 22, BR = 3.5;
+    // Measure actual element widths so ball coordinate space matches DOM
+    const cW = (classicPrev && classicPrev.offsetWidth) || 260;
+    const hW = (chaoticPrev && chaoticPrev.offsetWidth) || 260;
+    const H = 48, PW = 4, PH = 26, BR = 3.5; // PH=26 gives more forgiving hit zone
 
     // Classic state
-    let cbx = W * 0.4, cby = H / 2, cbvx = 1.4, cbvy = 0.6;
+    let cbx = cW * 0.4, cby = H / 2, cbvx = 1.4, cbvy = 0.6;
     let cly = (H - PH) / 2, clyv = 0, cry = (H - PH) / 2, cryv = 0;
     let clPh = 0, crPh = Math.PI * 0.65;
 
     // Chaotic state — faster, more erratic
-    let hbx = W * 0.55, hby = H / 2, hbvx = -1.8, hbvy = 0.9;
+    let hbx = hW * 0.55, hby = H / 2, hbvx = -1.8, hbvy = 0.9;
     let hly = (H - PH) / 2, hlyv = 0, hry = (H - PH) / 2, hryv = 0;
     let hlPh = Math.PI * 0.3, hrPh = Math.PI * 1.1;
     let puTimer = 0;
@@ -2865,27 +2876,25 @@ function animatePracticePreviews() {
         }
 
         // ── Classic bounce ──
+        // Right paddle left-edge position (what the ball collides with)
+        const cRpx = cW - 14 - PW;
         cbx += cbvx; cby += cbvy;
         if (cby < BR)     { cby = BR;     cbvy =  Math.abs(cbvy); }
         if (cby > H - BR) { cby = H - BR; cbvy = -Math.abs(cbvy); }
-        if (cbx - BR < 14 + PW && cbvx < 0 && cby > cly && cby < cly + PH) {
-            cbvx = Math.abs(cbvx); cbvy += (cby - (cly + PH/2)) * 0.05;
+        if (cbx - BR <= 14 + PW && cbvx < 0) {
+            cbx = 14 + PW + BR; cbvx = Math.abs(cbvx); cbvy += (cby - (cly + PH/2)) * 0.05;
         }
-        if (cbx + BR > W - 14 && cbvx > 0 && cby > cry && cby < cry + PH) {
-            cbvx = -Math.abs(cbvx); cbvy += (cby - (cry + PH/2)) * 0.05;
+        if (cbx + BR >= cRpx && cbvx > 0) {
+            cbx = cRpx - BR; cbvx = -Math.abs(cbvx); cbvy += (cby - (cry + PH/2)) * 0.05;
         }
         const cSpd = Math.sqrt(cbvx*cbvx + cbvy*cbvy);
         if (cSpd > 2.4) { cbvx *= 2.4/cSpd; cbvy *= 2.4/cSpd; }
-        if (cbx < -BR || cbx > W + BR) {
-            cbx = W/2; cby = H/2; cbvx = (Math.random() > 0.5 ? 1.3 : -1.3); cbvy = (Math.random()-0.5)*1.2;
-        }
+        // Paddle AI — high reaction so they always reach; small noise for natural feel
         clPh += 0.018; crPh += 0.027;
-        const clN = Math.sin(clPh) * 4, crN = Math.sin(crPh) * 6;
-        const clR = cbvx < 0 ? 0.08 : 0.02;
-        clyv += (cby - PH/2 - cly + clN) * clR; clyv *= 0.76;
+        const clN = Math.sin(clPh) * 3, crN = Math.sin(crPh) * 4;
+        clyv += (cby - PH/2 - cly + clN) * 0.13; clyv *= 0.74;
         cly = Math.max(0, Math.min(H - PH, cly + clyv));
-        const crR = cbvx > 0 ? 0.07 : 0.016;
-        cryv += (cby - PH/2 - cry + crN) * crR; cryv *= 0.78;
+        cryv += (cby - PH/2 - cry + crN) * 0.13; cryv *= 0.74;
         cry = Math.max(0, Math.min(H - PH, cry + cryv));
 
         if (cL) { cL.style.left = '14px'; cL.style.top = cly + 'px'; cL.style.transform = 'none'; }
@@ -2893,27 +2902,23 @@ function animatePracticePreviews() {
         if (cB) { cB.style.left = (cbx - BR) + 'px'; cB.style.top = (cby - BR) + 'px'; cB.style.transform = 'none'; }
 
         // ── Chaotic bounce ──
+        const hRpx = hW - 14 - PW;
         hbx += hbvx; hby += hbvy;
         if (hby < BR)     { hby = BR;     hbvy =  Math.abs(hbvy); }
         if (hby > H - BR) { hby = H - BR; hbvy = -Math.abs(hbvy); }
-        if (hbx - BR < 14 + PW && hbvx < 0 && hby > hly && hby < hly + PH) {
-            hbvx = Math.abs(hbvx) * 1.05; hbvy += (hby - (hly + PH/2)) * 0.07;
+        if (hbx - BR <= 14 + PW && hbvx < 0) {
+            hbx = 14 + PW + BR; hbvx = Math.abs(hbvx) * 1.05; hbvy += (hby - (hly + PH/2)) * 0.07;
         }
-        if (hbx + BR > W - 14 && hbvx > 0 && hby > hry && hby < hry + PH) {
-            hbvx = -Math.abs(hbvx) * 1.05; hbvy += (hby - (hry + PH/2)) * 0.07;
+        if (hbx + BR >= hRpx && hbvx > 0) {
+            hbx = hRpx - BR; hbvx = -Math.abs(hbvx) * 1.05; hbvy += (hby - (hry + PH/2)) * 0.07;
         }
         const hSpd = Math.sqrt(hbvx*hbvx + hbvy*hbvy);
         if (hSpd > 3.2) { hbvx *= 3.2/hSpd; hbvy *= 3.2/hSpd; }
-        if (hbx < -BR || hbx > W + BR) {
-            hbx = W/2; hby = H/2; hbvx = (Math.random() > 0.5 ? 1.8 : -1.8); hbvy = (Math.random()-0.5)*1.6;
-        }
         hlPh += 0.022; hrPh += 0.031;
-        const hlN = Math.sin(hlPh) * 5, hrN = Math.sin(hrPh) * 7;
-        const hlR = hbvx < 0 ? 0.09 : 0.022;
-        hlyv += (hby - PH/2 - hly + hlN) * hlR; hlyv *= 0.75;
+        const hlN = Math.sin(hlPh) * 4, hrN = Math.sin(hrPh) * 5;
+        hlyv += (hby - PH/2 - hly + hlN) * 0.14; hlyv *= 0.73;
         hly = Math.max(0, Math.min(H - PH, hly + hlyv));
-        const hrR = hbvx > 0 ? 0.08 : 0.018;
-        hryv += (hby - PH/2 - hry + hrN) * hrR; hryv *= 0.77;
+        hryv += (hby - PH/2 - hry + hrN) * 0.14; hryv *= 0.73;
         hry = Math.max(0, Math.min(H - PH, hry + hryv));
 
         if (hL) { hL.style.left = '14px'; hL.style.top = hly + 'px'; hL.style.transform = 'none'; }
@@ -2926,7 +2931,7 @@ function animatePracticePreviews() {
             pus.forEach(p => { p.style.display = 'none'; });
             puIndex = (puIndex + 1) % pus.length;
             const pu = pus[puIndex];
-            pu.style.left = (30 + Math.random() * (W - 60)) + 'px';
+            pu.style.left = (30 + Math.random() * (hW - 60)) + 'px';
             pu.style.top  = (6  + Math.random() * (H - 18)) + 'px';
             pu.style.display = 'flex';
             pu.style.opacity = '1';
