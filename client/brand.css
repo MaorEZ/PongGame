@@ -46,10 +46,10 @@ body::before, body::after { display: none !important; }
 .screen {
   background: var(--bone) !important;
   color: var(--ink) !important;
+  animation: none !important;
 }
 
 /* ── LOADING SCREEN — dark splash ────────────────────────────── */
-/* ── LOADING SCREEN ─────────────────────────────────────────────── */
 #loadingScreen {
   background: var(--ink) !important;
   color: var(--bone) !important;
@@ -88,9 +88,9 @@ body::before, body::after { display: none !important; }
   overflow: hidden;
   white-space: nowrap;
   width: 0;
-  animation: lsTypeOn 0.65s steps(32, end) 1.1s forwards;
+  animation: lsTypeOn 0.35s steps(16, end) 1.1s forwards;
 }
-@keyframes lsTypeOn { to { width: 32ch; } }
+@keyframes lsTypeOn { to { width: 16ch; } }
 .ls-foot { padding: 0 24px 32px; }
 .ls-bar {
   height: 3px;
