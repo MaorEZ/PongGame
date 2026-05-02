@@ -1101,7 +1101,12 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 }
 
 /* ── MATCH COUNTDOWN — VS slam screen (vss-* classes avoid style.css conflicts) ── */
-#matchCountdownScreen,
+#matchCountdownScreen {
+  /* base: let showScreen() control display via .active — do NOT force display here */
+  color: var(--bone) !important;
+  overflow: hidden !important;
+  min-height: unset !important;
+}
 #matchCountdownScreen.active {
   display: flex !important;
   flex-direction: column !important;
@@ -1109,15 +1114,12 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   justify-content: flex-start !important;
   height: 100dvh !important;
   height: 100vh !important;
-  min-height: unset !important;
   padding: 0 !important;
   background: var(--ink) !important;
   background-image:
     linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px) !important;
   background-size: 16px 16px !important;
-  color: var(--bone) !important;
-  overflow: hidden !important;
 }
 
 /* status bar */
