@@ -31,7 +31,7 @@ html, body {
 }
 body {
   font-family: var(--disp-f) !important;
-  background: var(--bone) !important;
+  background: var(--ink) !important;
   color: var(--ink) !important;
   -webkit-font-smoothing: antialiased !important;
 }
@@ -58,6 +58,7 @@ body::before, body::after { display: none !important; }
   padding: 0 !important;
 }
 #loadingScreen.active { display: flex !important; }
+#loadingScreen:not(.active) { display: none !important; }
 #loadingScreen .logo-go      { color: var(--bone) !important; }
 #loadingScreen .logo-against { color: var(--bone) !important; }
 #loadingScreen .logo-me      { color: var(--red)  !important; }
