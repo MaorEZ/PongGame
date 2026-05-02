@@ -789,10 +789,26 @@
                 Loading game...
             </div>
 
-            <!-- Race Countdown Overlay (5-second NFS style) -->
+            <!-- Race Countdown Overlay (VS slam — practice + multiplayer) -->
             <div class="race-overlay" id="raceOverlay">
+                <div class="ro-top">
+                    <div class="ro-mode" id="roMode">▸ CLASSIC · 1V1</div>
+                    <div class="ro-pot-row">POT <span class="ro-pot-amt" id="roPot">PRACTICE</span></div>
+                </div>
+                <div class="ro-players">
+                    <div class="ro-side">
+                        <div class="ro-avatar ro-av1" id="roAv1">Y</div>
+                        <div class="ro-name" id="roName1">YOU</div>
+                    </div>
+                    <div class="ro-vsword">VS</div>
+                    <div class="ro-side">
+                        <div class="ro-avatar ro-av2" id="roAv2">AI</div>
+                        <div class="ro-name" id="roName2">AI</div>
+                    </div>
+                </div>
                 <div class="race-label" id="raceLabel">GET READY</div>
                 <div class="race-number" id="raceNumber">5</div>
+                <div class="ro-noback" id="roNoBack">▸ NO BACKING OUT</div>
             </div>
 
             <!-- Frozen Indicator (Chaotic Mode) -->

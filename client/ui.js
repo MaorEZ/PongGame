@@ -2973,3 +2973,38 @@ function animatePracticePreviews() {
     }
     new MutationObserver(updateUrgency).observe(cdEl, { childList: true, characterData: true, subtree: true });
 })();
+
+// Race overlay — populate VS slam data when overlay becomes active
+(function() {
+    const overlay = document.getElementById('raceOverlay');
+    if (!overlay) return;
+
+    function populateRaceOverlay() {
+        const game = window.AppState && window.AppState.currentGame;
+        const p1Name = (game && game.player1Name) || 'YOU';
+        const p2Name = (game && game.player2Name) || 'AI';
+        const bet    = (game && game.betAmount)   || 0;
+        const mode   = (game && game.gameMode)    || 'classic';
+        const isPractice = !bet;
+
+        const av1El    = document.getElementById('roAv1');
+        const av2El    = document.getElementById('roAv2');
+        const name1El  = document.getElementById('roName1');
+        const name2El  = document.getElementById('roName2');
+        const potEl    = document.getElementById('roPot');
+        const modeEl   = document.getElementById('roMode');
+        const noBackEl = document.getElementById('roNoBack');
+
+        if (av1El)    av1El.textContent    = p1Name.charAt(0).toUpperCase();
+        if (av2El)    av2El.textContent    = getInitials(p2Name);
+        if (name1El)  name1El.textContent  = p1Name;
+        if (name2El)  name2El.textContent  = p2Name;
+        if (potEl)    potEl.textContent    = isPractice ? 'PRACTICE' : ('$' + Math.round(bet * 1.9));
+        if (modeEl)   modeEl.textContent   = '▸ ' + mode.toUpperCase() + ' · 1V1';
+        if (noBackEl) noBackEl.textContent = isPractice ? '▸ FREE PLAY · NO WAGER' : '▸ NO BACKING OUT';
+    }
+
+    new MutationObserver(() => {
+        if (overlay.classList.contains('active')) populateRaceOverlay();
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+})();
