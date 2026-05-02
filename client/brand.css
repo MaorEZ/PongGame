@@ -53,7 +53,6 @@ body::before, body::after { display: none !important; }
 #loadingScreen {
   background: var(--ink) !important;
   color: var(--bone) !important;
-  display: flex !important;
   flex-direction: column !important;
   height: 100dvh !important;
   padding: 0 !important;
