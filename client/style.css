@@ -6,7 +6,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: linear-gradient(135deg, #141c26 0%, #1e2d40 50%, #162030 100%);
+    background: #f4efe6;
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
@@ -22,7 +22,7 @@ body {
     animation: fadeIn 0.3s ease-in-out;
     position: relative;
     z-index: 1;
-    background: linear-gradient(135deg, #0f1419 0%, #1a2332 100%);
+    background: #f4efe6;
 }
 
 .screen.active {
@@ -43,9 +43,45 @@ body {
     }
 }
 
-/* Loading Screen */
+/* Loading Screen — critical layout set here so it works before brand.css applies */
 #loadingScreen {
-    background: linear-gradient(135deg, #0a0f17 0%, #141c26 50%, #0a0f17 100%);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    background: #0a0a0a;
+    color: #f4efe6;
+    padding: 0;
+}
+.ls-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 32px;
+}
+.ls-foot { padding: 0 24px 32px; }
+.ls-bar {
+    height: 3px;
+    background: #2a2a2a;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+.ls-bar-fill {
+    height: 100%;
+    background: #ff2e1f;
+    width: 0;
+    animation: lsBarFill 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes lsBarFill {
+    0%   { width: 0; }
+    75%  { width: 94%; }
+    100% { width: 100%; }
 }
 
 .loading-content {
