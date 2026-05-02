@@ -28,10 +28,11 @@
 html, body {
   overflow: hidden !important;
   height: 100% !important;
+  background: var(--bone) !important;
 }
 body {
   font-family: var(--disp-f) !important;
-  background: var(--ink) !important;
+  background: var(--bone) !important;
   color: var(--ink) !important;
   -webkit-font-smoothing: antialiased !important;
 }
@@ -51,14 +52,16 @@ body::before, body::after { display: none !important; }
 
 /* ── LOADING SCREEN — dark splash ────────────────────────────── */
 #loadingScreen {
-  background: var(--ink) !important;
-  color: var(--bone) !important;
-  flex-direction: column !important;
-  height: 100dvh !important;
-  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  color: var(--bone);
+  height: 100dvh;
+  padding: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
 }
-#loadingScreen.active { display: flex !important; }
-#loadingScreen:not(.active) { display: none !important; }
 #loadingScreen .logo-go      { color: var(--bone) !important; }
 #loadingScreen .logo-against { color: var(--bone) !important; }
 #loadingScreen .logo-me      { color: var(--red)  !important; }

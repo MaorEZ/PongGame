@@ -46,8 +46,7 @@ function initTelegram() {
             // Expand to full height
             tg.expand();
 
-            // Set theme colors
-            document.body.style.backgroundColor = tg.backgroundColor || '#0f1419';
+            // Theme colors handled by brand.css
 
             // Get user data from Telegram
             if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
@@ -102,6 +101,7 @@ function connectToServer() {
 
         AppState.socket.onopen = () => {
             console.log('Connected to game server');
+            window._hadSuccessfulConnection = true;
             const overlay = document.getElementById('reconnectOverlay');
             if (overlay) overlay.style.display = 'none';
 
@@ -139,8 +139,11 @@ function connectToServer() {
 
         AppState.socket.onclose = () => {
             console.log('Disconnected — retrying in 2s');
-            const overlay = document.getElementById('reconnectOverlay');
-            if (overlay) overlay.style.display = 'flex';
+            // Only show reconnect overlay after initial load AND a prior successful connection
+            if (window._appLoaded && window._hadSuccessfulConnection) {
+                const overlay = document.getElementById('reconnectOverlay');
+                if (overlay) overlay.style.display = 'flex';
+            }
             setTimeout(() => connectToServer(), 2000);
         };
 
@@ -1129,26 +1132,55 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Init error:', e);
     }
 
-    // Show name setup or main menu after loading (always runs)
-    setTimeout(() => {
+    // Transition off loading screen after animation completes
+    let _loadingDone = false;
+    function _exitLoading() {
+        if (_loadingDone) return;
+        _loadingDone = true;
+
+        // Show the target screen before fading out loading screen
         try {
             if (!AppState.naming.isSet) {
-                // Pre-fill with Telegram name if available
                 const nameInput = document.getElementById('nameInput');
                 if (AppState.user.name && AppState.user.name !== 'Player') {
-                    nameInput.value = AppState.user.name.replace(/[^a-zA-Z0-9_]/g, '');
+                    if (nameInput) nameInput.value = AppState.user.name.replace(/[^a-zA-Z0-9_]/g, '');
                 }
-                document.getElementById('nameChangesLeft').textContent = 'Name changes remaining: ' + AppState.naming.changesRemaining;
+                const changesEl = document.getElementById('nameChangesLeft');
+                if (changesEl) changesEl.textContent = 'Name changes remaining: ' + AppState.naming.changesRemaining;
                 showScreen('nameSetupScreen');
             } else {
                 showScreen('mainMenu');
             }
         } catch (e) {
             console.error('Screen transition error:', e);
-            // Last resort - force show main menu
-            showScreen('mainMenu');
+            try { showScreen('mainMenu'); } catch (_) {}
         }
-    }, 1500);
+
+        // Ensure reconnect overlay doesn't block the initial screen
+        const overlay = document.getElementById('reconnectOverlay');
+        if (overlay) overlay.style.display = 'none';
+
+        // Mark app as loaded now — overlay is gated on _hadSuccessfulConnection anyway
+        window._appLoaded = true;
+
+        // Fade out loading screen using inline styles (no CSS class dependency)
+        const ls = document.getElementById('loadingScreen');
+        if (ls) {
+            ls.style.pointerEvents = 'none';
+            ls.style.transition = 'opacity 0.3s ease';
+            // Double rAF: commit the transition property before changing opacity
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    ls.style.opacity = '0';
+                });
+            });
+            setTimeout(() => {
+                ls.style.display = 'none';
+            }, 350);
+        }
+    }
+    // Single reliable timeout — animation is 2.2s, we fire at 2.4s
+    setTimeout(_exitLoading, 2400);
 });
 
 // Handle app close
