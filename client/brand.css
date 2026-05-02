@@ -1100,6 +1100,52 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   background-size: 16px 16px;
 }
 
+/* ── RACE OVERLAY — in-game GET READY countdown (practice + multiplayer) ─── */
+.race-overlay {
+  background: rgba(10,10,10,0.88) !important;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px) !important;
+  background-size: 16px 16px !important;
+}
+.race-label {
+  font-family: var(--mono-f) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: var(--mute-2) !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
+}
+.race-number {
+  font-family: var(--disp-f) !important;
+  font-weight: 800 !important;
+  color: var(--bone) !important;
+  text-shadow: none !important;
+  animation: brandRacePulse 0.25s ease-out !important;
+  line-height: 0.85 !important;
+  letter-spacing: -0.06em !important;
+}
+.race-number.go {
+  color: var(--acid) !important;
+  text-shadow: none !important;
+  animation: brandRaceGo 0.5s ease-out forwards !important;
+}
+.race-number.warning {
+  color: var(--red) !important;
+  text-shadow: none !important;
+  animation: brandRacePulse 0.25s ease-out !important;
+}
+@keyframes brandRacePulse {
+  0%   { transform: scale(1.4); opacity: 0; }
+  60%  { transform: scale(0.97); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes brandRaceGo {
+  0%   { transform: scale(1.2); opacity: 1; }
+  60%  { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0; }
+}
+
 /* ── MATCH COUNTDOWN — VS slam screen (vss-* classes avoid style.css conflicts) ── */
 #matchCountdownScreen {
   /* base: let showScreen() control display via .active — do NOT force display here */
