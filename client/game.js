@@ -262,7 +262,7 @@ function startGame(gameData) {
     overlay.classList.add('active');
     if (labelEl) labelEl.textContent = 'GET READY';
 
-    let countdown = 3;
+    let countdown = 5;
     numEl.textContent = countdown;
     numEl.className = 'race-number';
     numEl.style.animation = 'none';
@@ -274,7 +274,7 @@ function startGame(gameData) {
 
         if (countdown > 0) {
             numEl.textContent = countdown;
-            numEl.className = 'race-number';
+            numEl.className = countdown <= 2 ? 'race-number warning' : 'race-number';
             numEl.style.animation = 'none';
             numEl.offsetHeight;
             numEl.style.animation = '';
@@ -1407,13 +1407,16 @@ function updateBallPhysics() {
         }
     }
 
-    // Cap ball speed
-    const maxSpeed = Game.gameMode === 'chaotic' ? 25.9 : 20.1;
+    // Cap ball speed (raised caps allow ~24 hits before ceiling)
+    const maxSpeed = Game.gameMode === 'chaotic' ? 42 : 34;
     const spd = Math.sqrt(Game.ball.speedX * Game.ball.speedX + Game.ball.speedY * Game.ball.speedY);
     if (spd > maxSpeed) {
         Game.ball.speedX = (Game.ball.speedX / spd) * maxSpeed;
         Game.ball.speedY = (Game.ball.speedY / spd) * maxSpeed;
     }
+    // Sync display % with actual speed so it stops at the real cap
+    const realSpd = Math.sqrt(Game.ball.speedX * Game.ball.speedX + Game.ball.speedY * Game.ball.speedY);
+    Game.ball.accumulatedSpeedPct = Math.max(0, Math.round((realSpd / Game.ball.baseSpeed - 1) * 100));
 
     // Score - Opponent missed (top) = Player 1 wins this round
     if (Game.roundActive && Game.ball.y - Game.ball.radius < 0) {

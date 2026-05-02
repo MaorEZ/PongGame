@@ -14,44 +14,6 @@ body {
     position: relative;
 }
 
-/* Soft floating orbs in background */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background:
-        radial-gradient(circle 300px at 15% 30%, rgba(79, 209, 197, 0.20) 0%, transparent 70%),
-        radial-gradient(circle 250px at 85% 70%, rgba(79, 209, 197, 0.15) 0%, transparent 70%),
-        radial-gradient(circle 200px at 50% 10%, rgba(251, 191, 36, 0.12) 0%, transparent 70%);
-    animation: floatingOrbs 20s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: 0;
-}
-
-@keyframes floatingOrbs {
-    0% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(20px, -15px) scale(1.05); }
-    66% { transform: translate(-15px, 10px) scale(0.97); }
-    100% { transform: translate(10px, -8px) scale(1.02); }
-}
-
-/* Slow-drifting dot grid */
-body::after {
-    content: '';
-    position: fixed;
-    top: -32px; left: -32px; right: -32px; bottom: -32px;
-    background-image: radial-gradient(rgba(79, 209, 197, 0.12) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-    animation: gridDrift 60s linear infinite;
-}
-
-@keyframes gridDrift {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(40px, 40px); }
-}
-
 /* Screen Management */
 .screen {
     display: none;
@@ -265,16 +227,7 @@ body::after {
     font-weight: 700;
     color: #fbbf24;
     text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
-    animation: balanceGlow 3s ease-in-out infinite;
-}
 
-@keyframes balanceGlow {
-    0%, 100% {
-        text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
-    }
-    50% {
-        text-shadow: 0 0 25px rgba(251, 191, 36, 0.8);
-    }
 }
 
 .balance-label {
@@ -310,94 +263,13 @@ body::after {
     }
 }
 
-/* Top/bottom accent lines - red-to-gold gradient */
-.logo-accent-line {
-    width: 100px;
-    height: 2px;
-    margin: 0 auto 10px;
-    background: linear-gradient(90deg, transparent, #cc2233, #f5d77a, #cc2233, transparent);
-    border-radius: 2px;
-    animation: lineShimmer 3s ease-in-out infinite;
-}
-
-.logo-accent-line.bottom {
-    margin: 10px auto 8px;
-}
-
-@keyframes lineShimmer {
-    0%, 100% { opacity: 0.5; width: 100px; }
-    50% { opacity: 1; width: 150px; }
-}
-
-/* Stacked word layout - GO / AGAINST / ME */
+/* Stacked word layout */
 .logo-stack {
     display: flex;
     flex-direction: column;
     align-items: center;
     line-height: 1;
     gap: 0;
-}
-
-/* "GO" - silver/white, small, sets up the challenge */
-.logo-go {
-    font-size: 1.4rem;
-    font-weight: 800;
-    letter-spacing: 10px;
-    background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
-}
-
-/* "AGAINST" - RED, large, dominant - the provocation hook */
-.logo-against {
-    font-size: 2.8rem;
-    font-weight: 900;
-    letter-spacing: 5px;
-    line-height: 1.1;
-    background: linear-gradient(180deg, #ff4444 0%, #cc2233 50%, #991122 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    filter: drop-shadow(0 0 25px rgba(204, 34, 51, 0.6));
-    animation: againstPulse 2.5s ease-in-out infinite;
-}
-
-@keyframes againstPulse {
-    0%, 100% { filter: drop-shadow(0 0 20px rgba(204, 34, 51, 0.5)); }
-    50% { filter: drop-shadow(0 0 35px rgba(255, 68, 68, 0.8)); }
-}
-
-/* "ME" - gold, bold - the reward/money signal */
-.logo-me {
-    font-size: 1.6rem;
-    font-weight: 900;
-    letter-spacing: 12px;
-    background: linear-gradient(180deg, #f5d77a 0%, #d4a843 50%, #b8862d 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    filter: drop-shadow(0 0 15px rgba(212, 168, 67, 0.5));
-}
-
-/* Tagline - silver shimmer, motivational */
-.logo-tagline {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 6px;
-    text-transform: uppercase;
-    background: linear-gradient(90deg, #64748b, #e2e8f0, #fbbf24, #e2e8f0, #64748b);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    background-size: 300% 100%;
-    animation: taglineShimmer 5s linear infinite;
-}
-
-@keyframes taglineShimmer {
-    0% { background-position: 300% 0; }
-    100% { background-position: -300% 0; }
 }
 
 /* Hamburger Menu Button */
@@ -483,16 +355,6 @@ body::after {
 .btn-create {
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
-    animation: createPulse 3s ease-in-out infinite;
-}
-
-@keyframes createPulse {
-    0%, 100% {
-        box-shadow: 0 6px 25px rgba(239, 68, 68, 0.4);
-    }
-    50% {
-        box-shadow: 0 8px 35px rgba(239, 68, 68, 0.7);
-    }
 }
 
 .btn-join {
@@ -504,44 +366,18 @@ body::after {
     background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
     color: white;
     border: 2px dashed rgba(79, 209, 197, 0.3);
-    animation: practicePulse 2s ease-in-out infinite;
 }
 
-@keyframes practicePulse {
-    0%, 100% {
-        box-shadow: 0 6px 25px rgba(6, 182, 212, 0.4);
-    }
-    50% {
-        box-shadow: 0 8px 35px rgba(6, 182, 212, 0.7);
-    }
-}
-
-.btn-create:hover,
-.btn-join:hover,
-.btn-practice:hover {
+.btn-create:hover, .btn-join:hover, .btn-practice:hover {
     transform: translateY(-3px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
 }
 
-.btn-create:active,
-.btn-join:active,
-.btn-practice:active {
+.btn-create:active, .btn-join:active, .btn-practice:active {
     transform: translateY(-1px) scale(0.98);
 }
 
-.btn-icon {
-    font-size: 1.8rem;
-    animation: iconFloat 2s ease-in-out infinite;
-}
-
-@keyframes iconFloat {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-5px);
-    }
-}
+.btn-icon { font-size: 1.8rem; }
 
 /* Slide Menu */
 .slide-menu {
@@ -758,12 +594,6 @@ body::after {
     border-radius: 50%;
     background: #10b981;
     box-shadow: 0 0 6px #10b981;
-    animation: onlinePulse 2s ease-in-out infinite;
-}
-
-@keyframes onlinePulse {
-    0%, 100% { opacity: 1;   box-shadow: 0 0 6px #10b981; }
-    50%       { opacity: 0.5; box-shadow: 0 0 12px #10b981; }
 }
 
 /* Safe-area padding for iPhone home bar */

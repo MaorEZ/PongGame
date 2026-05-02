@@ -49,29 +49,74 @@ body::before, body::after { display: none !important; }
 }
 
 /* ── LOADING SCREEN — dark splash ────────────────────────────── */
+/* ── LOADING SCREEN ─────────────────────────────────────────────── */
 #loadingScreen {
   background: var(--ink) !important;
   color: var(--bone) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100dvh !important;
+  padding: 0 !important;
 }
-#loadingScreen .loading-logo .logo-accent-line { display: none !important; }
-#loadingScreen .logo-go     { color: var(--bone) !important; }
-#loadingScreen .logo-against { color: var(--bone) !important; font-style: normal !important; }
-#loadingScreen .logo-me     { color: var(--red) !important; font-style: italic !important; }
-#loadingScreen .logo-vs-box { color: var(--red) !important; border-color: var(--red) !important; }
+#loadingScreen.active { display: flex !important; }
+#loadingScreen .logo-go      { color: var(--bone) !important; }
+#loadingScreen .logo-against { color: var(--bone) !important; }
+#loadingScreen .logo-me      { color: var(--red)  !important; }
+#loadingScreen .logo-vs-box  { color: var(--red)  !important; border-color: var(--red) !important; }
 #loadingScreen .logo-tagline { color: var(--mute-2) !important; }
-.loading-content p {
-  font-family: var(--mono-f) !important;
-  color: var(--mute-2) !important;
-  font-size: 11px !important;
-  letter-spacing: 0.18em !important;
-  text-transform: uppercase;
+.ls-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
 }
-.loader {
-  border-color: rgba(255,255,255,0.1) !important;
-  border-top-color: var(--red) !important;
-  width: 32px !important;
-  height: 32px !important;
-  border-width: 3px !important;
+.ls-logo { text-align: center; }
+.ls-term {
+  margin-top: 52px;
+  font-family: var(--mono-f);
+  font-size: 11px;
+  color: var(--acid);
+  letter-spacing: 0.18em;
+  width: 100%;
+  max-width: 260px;
+  overflow: hidden;
+  min-height: 18px;
+}
+.ls-term-text {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  animation: lsTypeOn 0.65s steps(32, end) 1.1s forwards;
+}
+@keyframes lsTypeOn { to { width: 32ch; } }
+.ls-foot { padding: 0 24px 32px; }
+.ls-bar {
+  height: 3px;
+  background: var(--line);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.ls-bar-fill {
+  height: 100%;
+  background: var(--red);
+  width: 0;
+  animation: lsBarFill 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes lsBarFill {
+  0%   { width: 0; }
+  75%  { width: 94%; }
+  100% { width: 100%; }
+}
+.ls-bar-lbl {
+  font-family: var(--mono-f);
+  font-size: 10px;
+  color: var(--mute);
+  text-align: center;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* ── WORDMARK ────────────────────────────────────────────────── */
@@ -1742,25 +1787,127 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 #withdrawFeeNote { font-family: var(--mono-f) !important; color: var(--mute) !important; font-size: 10px !important; }
 
 /* ── CHAT WIDGET ──────────────────────────────────────────────── */
-#chatWidget .chat-bubble {
-  background: var(--ink) !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
+.cw-widget {
+  position: fixed;
+  bottom: 20px;
+  left: 16px;
+  z-index: 5000;
 }
-#chatWidget .chat-panel {
-  background: var(--bone) !important;
-  border: 1.5px solid var(--ink) !important;
-  border-radius: 0 !important;
-  box-shadow: 4px 4px 0 var(--ink) !important;
+.cw-panel {
+  flex-direction: column;
+  position: absolute;
+  bottom: 52px;
+  left: 0;
+  width: 290px;
+  height: 360px;
+  background: var(--bone);
+  border: 1.5px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  overflow: hidden;
 }
-#chatWidget .chat-header {
-  background: var(--ink) !important;
-  color: var(--bone) !important;
-  font-family: var(--mono-f) !important;
+.cw-head {
+  padding: 10px 12px;
+  background: var(--ink);
+  border-bottom: 1.5px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
 }
-#chatWidget input {
-  border-radius: 0 !important;
-  font-family: var(--mono-f) !important;
+.cw-head-lbl {
+  font-family: var(--mono-f);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bone);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.cw-close {
+  background: none;
+  border: none;
+  color: var(--mute);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  font-family: var(--mono-f);
+}
+.cw-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--bone);
+}
+.cw-foot {
+  padding: 8px 10px;
+  border-top: 1.5px solid var(--ink);
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  background: var(--bone);
+}
+.cw-input {
+  flex: 1;
+  background: var(--bone-2);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  padding: 7px 9px;
+  color: var(--ink);
+  font-family: var(--mono-f);
+  font-size: 11px;
+  outline: none;
+}
+.cw-input::placeholder { color: var(--mute); }
+.cw-send {
+  background: var(--ink);
+  border: none;
+  padding: 7px 10px;
+  color: var(--bone);
+  font-family: var(--mono-f);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cw-bubble-wrap { position: relative; display: inline-block; }
+.cw-bubble {
+  width: 56px;
+  height: 36px;
+  border-radius: 0;
+  background: var(--ink);
+  border: 1.5px solid var(--bone);
+  color: var(--bone);
+  font-family: var(--mono-f);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cw-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--red);
+  color: var(--bone);
+  border-radius: 0;
+  min-width: 16px;
+  height: 16px;
+  font-family: var(--mono-f);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  pointer-events: none;
 }
 
 /* ── REMATCH BANNER ───────────────────────────────────────────── */
@@ -1972,6 +2119,7 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   max-height: 100vh !important;
   min-height: unset !important;
   overflow: hidden !important;
+  background: var(--ink) !important;
 }
 #gameScreen.active {
   display: block !important;
@@ -1983,6 +2131,7 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   height: 100dvh !important;
   max-height: 100vh !important;
   overflow: hidden !important;
+  background: var(--ink) !important;
 }
 
 /* ── GAME SCREEN — hide center status text ───────────────────── */
