@@ -517,48 +517,46 @@
 
     <!-- Match Countdown Screen — full-viewport VS slam, no back possible -->
     <div id="matchCountdownScreen" class="screen">
-        <div class="mc-vs-screen">
-            <div class="mc-vs-status">
-                <span class="mc-vs-locked">● MATCH LOCKED</span>
-                <span class="mc-vs-room" id="mcRoomId">ROOM #—</span>
-            </div>
-
-            <div class="mc-vs-info">
-                <div class="mc-vs-headup" id="mcMode">HEADS-UP · CLASSIC</div>
-                <div class="mc-vs-pot">POT <span class="mc-vs-pot-amt" id="mcWager">$20</span></div>
-            </div>
-
-            <div class="mc-vs-main">
-                <div class="mc-vs-players">
-                    <div class="mc-vs-player mc-vs-p1">
-                        <div class="mc-avatar mc-p1" id="mcPlayer1Avatar">P1</div>
-                        <div class="mc-name" id="mcPlayer1Name">Player 1</div>
-                        <div class="mc-elo" id="mcPlayer1Elo"></div>
-                    </div>
-                    <div class="mc-vs-word">VS</div>
-                    <div class="mc-vs-player mc-vs-p2">
-                        <div class="mc-avatar mc-p2" id="mcPlayer2Avatar">P2</div>
-                        <div class="mc-name" id="mcPlayer2Name">Player 2</div>
-                        <div class="mc-elo" id="mcPlayer2Elo"></div>
-                    </div>
-                </div>
-
-                <div class="mc-vs-countdown" id="mcCountdownNum">10</div>
-                <div class="mc-vs-noback">▸ NO BACKING OUT</div>
-                <div class="mc-status" id="mcStatus" style="display:none;"></div>
-            </div>
-
-            <!-- Provably fair card pinned to bottom -->
-            <div class="mc-proof-card">
-                <div class="mc-proof-label">▸ PROVABLY FAIR · SEED COMMITTED</div>
-                <div class="mc-proof-hash" id="mcProofHash">0x4f1c·9bd2·a8e4·…71c0</div>
-            </div>
-
-            <!-- keep the ring SVG for JS compat but hide it -->
-            <svg style="display:none">
-                <circle id="mcRingFg" />
-            </svg>
+        <!-- top status bar -->
+        <div class="vss-bar">
+            <span class="vss-locked">● MATCH LOCKED</span>
+            <span class="vss-room" id="mcRoomId">ROOM #—</span>
         </div>
+
+        <!-- mode + pot info -->
+        <div class="vss-meta">
+            <div class="vss-headup" id="mcMode">▸ HEADS-UP · CLASSIC</div>
+            <div class="vss-pot">POT <span class="vss-pot-amt" id="mcWager">$20</span></div>
+        </div>
+
+        <!-- VS center — players, big countdown, no-back -->
+        <div class="vss-center">
+            <div class="vss-players">
+                <div class="vss-side">
+                    <div class="vss-avatar vss-av1" id="mcPlayer1Avatar">P1</div>
+                    <div class="vss-name" id="mcPlayer1Name">Player 1</div>
+                    <div class="vss-elo" id="mcPlayer1Elo"></div>
+                </div>
+                <div class="vss-vsword">VS</div>
+                <div class="vss-side">
+                    <div class="vss-avatar vss-av2" id="mcPlayer2Avatar">P2</div>
+                    <div class="vss-name" id="mcPlayer2Name">Player 2</div>
+                    <div class="vss-elo" id="mcPlayer2Elo"></div>
+                </div>
+            </div>
+            <div class="vss-num" id="mcCountdownNum">10</div>
+            <div class="vss-noback">▸ NO BACKING OUT</div>
+        </div>
+
+        <!-- provably fair proof card -->
+        <div class="vss-proof">
+            <div class="vss-proof-lbl">▸ PROVABLY FAIR · SEED COMMITTED</div>
+            <div class="vss-proof-hash" id="mcProofHash">0x4f1c·9bd2·a8e4·…71c0</div>
+        </div>
+
+        <!-- compat stubs — hidden, kept for JS that writes to them -->
+        <div id="mcStatus" style="display:none;"></div>
+        <svg style="display:none"><circle id="mcRingFg"/></svg>
     </div>
 
     <!-- Create Room Budget Screen (from room browser) -->

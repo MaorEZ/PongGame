@@ -2962,14 +2962,14 @@ function animatePracticePreviews() {
     }).observe(pracEl, { attributes: true, attributeFilter: ['class'] });
 })();
 
-// Match countdown — turn red when n <= 1, show "GO" style
+// Match countdown — turn red at n<=3 (vss-num.urgent)
 (function() {
     const cdEl = document.getElementById('mcCountdownNum');
     if (!cdEl) return;
     function updateUrgency() {
         const txt = cdEl.textContent.trim();
         const n = parseInt(txt, 10);
-        cdEl.classList.toggle('urgent', (!isNaN(n) && n <= 1) || txt === 'GO');
+        cdEl.classList.toggle('urgent', (!isNaN(n) && n <= 3) || txt === 'GO');
     }
     new MutationObserver(updateUrgency).observe(cdEl, { childList: true, characterData: true, subtree: true });
 })();

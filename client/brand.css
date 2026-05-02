@@ -1100,47 +1100,37 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   background-size: 16px 16px;
 }
 
-/* ── MATCH COUNTDOWN — full-viewport VS slam ──────────────────── */
-#matchCountdownScreen {
-  background: var(--ink) !important;
-  color: var(--bone) !important;
-  overflow: hidden !important;
-  height: 100vh !important;
-  height: 100dvh !important;
-  min-height: unset !important;
-}
+/* ── MATCH COUNTDOWN — VS slam screen (vss-* classes avoid style.css conflicts) ── */
+#matchCountdownScreen,
 #matchCountdownScreen.active {
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
   justify-content: flex-start !important;
+  height: 100dvh !important;
+  height: 100vh !important;
+  min-height: unset !important;
   padding: 0 !important;
-}
-
-.mc-vs-screen {
-  position: relative;
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  min-height: 100dvh;
-  overflow: hidden;
+  background: var(--ink) !important;
   background-image:
     linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 16px 16px;
+    linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px) !important;
+  background-size: 16px 16px !important;
+  color: var(--bone) !important;
+  overflow: hidden !important;
 }
 
-.mc-vs-status {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 30px;
+/* status bar */
+.vss-bar {
+  flex-shrink: 0;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-.mc-vs-locked {
+.vss-locked {
   font-family: var(--mono-f);
   font-size: 9.5px;
   font-weight: 700;
@@ -1148,21 +1138,20 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.mc-vs-room {
+.vss-room {
   font-family: var(--mono-f);
   font-size: 9.5px;
   color: var(--mute-2);
   letter-spacing: 0.1em;
 }
 
-.mc-vs-info {
-  position: absolute;
-  top: 60px;
-  left: 0; right: 0;
+/* mode + pot row */
+.vss-meta {
+  flex-shrink: 0;
   text-align: center;
-  padding: 0 22px;
+  padding: 14px 22px 0;
 }
-.mc-vs-headup {
+.vss-headup {
   font-family: var(--mono-f);
   font-size: 11px;
   font-weight: 700;
@@ -1171,39 +1160,39 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   text-transform: uppercase;
   margin-bottom: 4px;
 }
-.mc-vs-pot {
+.vss-pot {
   font-family: var(--mono-f);
   font-size: 13px;
   color: var(--mute-2);
   letter-spacing: 0.06em;
 }
-.mc-vs-pot-amt {
+.vss-pot-amt {
   font-family: var(--disp-f);
   font-weight: 800;
   color: var(--bone);
 }
 
-/* wrapper so players+countdown+noback are centered together */
-.mc-vs-main {
-  position: absolute;
-  top: 130px;
-  left: 0; right: 0;
+/* center content — takes all remaining space and centers its children */
+.vss-center {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 0 22px;
 }
 
-.mc-vs-players {
+/* players row */
+.vss-players {
   display: grid;
-  grid-template-columns: auto auto auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
   width: 100%;
+  margin-bottom: 16px;
 }
-.mc-vs-player { text-align: center; }
-.mc-vs-word {
+.vss-side { text-align: center; }
+.vss-vsword {
   font-family: var(--disp-f);
   font-size: 90px;
   font-weight: 800;
@@ -1213,34 +1202,43 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   line-height: 0.85;
   padding: 0 4px;
 }
-.mc-avatar {
-  width: 88px; height: 88px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--disp-f); font-weight: 800; font-size: 30px;
-  border-radius: 0 !important;
-  border: 1.5px solid var(--line) !important;
+.vss-avatar {
+  width: 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--disp-f);
+  font-weight: 800;
+  font-size: 30px;
+  border-radius: 0;
+  border: 1.5px solid rgba(255,255,255,0.12);
   margin: 0 auto 8px;
 }
-.mc-p1 { background: var(--acid) !important; color: var(--ink) !important; }
-.mc-p2 { background: var(--red) !important; color: var(--bone) !important; }
-.mc-name {
-  font-family: var(--disp-f) !important;
-  font-size: 15px !important;
-  font-weight: 800 !important;
-  color: var(--bone) !important;
+.vss-av1 { background: var(--acid); color: var(--ink); }
+.vss-av2 { background: var(--red);  color: var(--bone); }
+.vss-name {
+  font-family: var(--disp-f);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--bone);
   max-width: 88px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0 auto;
 }
-.mc-elo {
+.vss-elo {
   font-family: var(--mono-f);
   font-size: 9.5px;
   color: var(--mute-2);
   margin-top: 3px;
   letter-spacing: 0.1em;
+  text-align: center;
 }
 
-.mc-vs-countdown {
+/* big countdown number */
+.vss-num {
   font-family: var(--disp-f);
   font-size: 168px;
   font-weight: 800;
@@ -1249,46 +1247,46 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   letter-spacing: -0.08em;
   text-align: center;
   transition: color 0.18s;
-  margin-top: 8px;
 }
-.mc-vs-countdown.urgent { color: var(--red) !important; }
+.vss-num.urgent { color: var(--red); }
 
-.mc-vs-noback {
+.vss-noback {
   font-family: var(--mono-f);
   font-size: 11px;
   font-weight: 700;
   color: var(--acid);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  margin-top: 6px;
+  margin-top: 8px;
 }
-.mc-status { display: none !important; }
-.mc-mode, .mc-wager { display: none !important; }
 
-/* Proof card — pinned to bottom */
-.mc-proof-card {
-  position: absolute;
-  bottom: 16px;
-  left: 16px; right: 16px;
-  background: var(--ink-2);
-  border: 1.5px solid var(--line);
-  color: var(--mute-2);
+/* proof card */
+.vss-proof {
+  flex-shrink: 0;
+  margin: 0 16px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
   padding: 10px 12px;
 }
-.mc-proof-label {
+.vss-proof-lbl {
   font-family: var(--mono-f);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--mute-2);
   margin-bottom: 4px;
 }
-.mc-proof-hash {
+.vss-proof-hash {
   font-family: var(--mono-f);
   font-size: 10px;
   color: var(--bone);
   word-break: break-all;
 }
+
+/* hide old compat stubs */
+.mc-status { display: none !important; }
+.mc-mode, .mc-wager { display: none !important; }
 
 /* ── USER INFO (misc screens) ─────────────────────────────────── */
 .user-info {
