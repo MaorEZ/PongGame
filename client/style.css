@@ -19,7 +19,6 @@ body {
     display: none;
     min-height: 100vh;
     padding: 20px;
-    animation: fadeIn 0.3s ease-in-out;
     position: relative;
     z-index: 1;
     background: #f4efe6;
@@ -30,17 +29,6 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 /* Loading Screen — critical layout set here so it works before brand.css applies */
@@ -84,57 +72,9 @@ body {
     100% { width: 100%; }
 }
 
-.loading-content {
-    text-align: center;
-    color: white;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-}
-
-.loading-content h1 {
-    font-size: 2rem;
-    margin-bottom: 30px;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* Loading screen uses the same logo style as main menu */
-.loading-logo {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 40px;
-    animation: logoEntrance 0.8s ease-out;
-}
-
-.loading-logo .logo-accent-line {
-    margin-bottom: 8px;
-}
-
-.loading-logo .logo-accent-line.bottom {
-    margin-top: 8px;
-    margin-bottom: 0;
-}
-
-.loader {
-    width: 50px;
-    height: 50px;
-    border: 5px solid rgba(255, 255, 255, 0.3);
-    border-top: 5px solid white;
-    border-radius: 50%;
-    margin: 0 auto 20px;
-    animation: spin 1s linear infinite;
-}
-
 @keyframes spin {
-    0% { transform: rotate(0deg); }
+    0%   { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-}
-
-.loading-content p {
-    font-size: 1rem;
-    opacity: 0.9;
 }
 
 /* Container */

@@ -1163,13 +1163,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mark app as loaded now — overlay is gated on _hadSuccessfulConnection anyway
         window._appLoaded = true;
 
-        // Hide loading screen after one paint frame so target screen renders first
+        // Hide loading screen in the same JS tick as showScreen so both paint together
         const ls = document.getElementById('loadingScreen');
-        if (ls) {
-            requestAnimationFrame(() => {
-                ls.style.display = 'none';
-            });
-        }
+        if (ls) ls.style.display = 'none';
     }
     // Single reliable timeout — animation is 2.2s, we fire at 2.4s
     setTimeout(_exitLoading, 2400);
