@@ -648,6 +648,22 @@ body::before, body::after { display: none !important; }
 .menu-desc  { color: var(--mute) !important; font-family: var(--mono-f) !important; font-size: 10px !important; }
 .slide-menu-content { background: var(--bone) !important; }
 
+/* ── NAME SETUP SCREEN — dark so it never reads as blank ─────── */
+#nameSetupScreen {
+  background: var(--ink) !important;
+}
+#nameSetupScreen .container {
+  background: var(--ink-2) !important;
+  border-color: var(--line) !important;
+  color: var(--bone) !important;
+}
+#nameSetupScreen .container h2 {
+  color: var(--bone) !important;
+}
+#nameSetupScreen .container p {
+  color: var(--mute-2) !important;
+}
+
 /* ── CONTAINERS (all inner screens) ──────────────────────────── */
 .container {
   background: var(--bone) !important;

@@ -1163,20 +1163,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mark app as loaded now — overlay is gated on _hadSuccessfulConnection anyway
         window._appLoaded = true;
 
-        // Fade out loading screen using inline styles (no CSS class dependency)
+        // Hide loading screen after one paint frame so target screen renders first
         const ls = document.getElementById('loadingScreen');
         if (ls) {
-            ls.style.pointerEvents = 'none';
-            ls.style.transition = 'opacity 0.3s ease';
-            // Double rAF: commit the transition property before changing opacity
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    ls.style.opacity = '0';
-                });
-            });
-            setTimeout(() => {
                 ls.style.display = 'none';
-            }, 350);
+            });
         }
     }
     // Single reliable timeout — animation is 2.2s, we fire at 2.4s
