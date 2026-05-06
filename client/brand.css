@@ -1075,7 +1075,7 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 12px 14px;
+  padding: 8px 14px;
   background: var(--bone);
   border: 1.5px solid var(--ink);
   cursor: pointer;
@@ -1100,14 +1100,14 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 .rb-practice-txt {
   display: block;
   font-family: var(--disp-f);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .rb-practice-arr {
   font-family: var(--mono-f);
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -1140,13 +1140,13 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
 .rb-create-btn {
   display: block;
   width: 100%;
-  padding: 15px;
+  padding: 20px;
   background: var(--ink) !important;
   color: var(--bone) !important;
   border: none !important;
   border-radius: 0 !important;
   font-family: var(--mono-f) !important;
-  font-size: 13px !important;
+  font-size: 16px !important;
   font-weight: 700 !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;

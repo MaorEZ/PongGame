@@ -2803,7 +2803,14 @@ function showRaceCountdown(startAtEpochMs, durationMs, serverTime) {
     _loopTickCount = 0; // reset so first-tick logs appear
     gameLoop(); // start rendering background
 
-    // Show overlay
+    // Live multiplayer already had the 10s VS slam — skip the 5s overlay
+    if (!Game.isAIGame) {
+        _gameplayStarted = false;
+        document.getElementById('gameStatus').textContent = 'Get ready...';
+        return; // server's gameplayStart event will call startGameplay()
+    }
+
+    // Show overlay (AI/practice games only)
     overlay.classList.add('active');
     labelEl.textContent = 'GET READY';
     _gameplayStarted = false;

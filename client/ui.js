@@ -1471,10 +1471,7 @@ function startAIGame() {
     };
 
     initGame(aiGameData);
-
-    setTimeout(() => {
-        startGame(aiGameData);
-    }, 1000);
+    startGame(aiGameData);
 }
 
 // Back button handlers for new screens
