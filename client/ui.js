@@ -127,15 +127,6 @@ document.getElementById('playSquare').addEventListener('click', () => {
 
 // practiceSquare removed from main menu; practice lives in room browser
 
-document.getElementById('comingSoon1').addEventListener('click', () => {
-    hapticFeedback('light');
-    showNotification('Coming Soon! Stay tuned.');
-});
-
-document.getElementById('comingSoon2').addEventListener('click', () => {
-    hapticFeedback('light');
-    showNotification('Coming Soon! Stay tuned.');
-});
 
 // Slide menu buttons
 document.getElementById('depositBtn').addEventListener('click', () => {

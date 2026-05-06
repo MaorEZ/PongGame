@@ -55,16 +55,21 @@ body::before, body::after { display: none !important; }
   flex-direction: column;
   background: var(--ink);
   color: var(--bone);
-  height: 100dvh;
-  padding: 0;
+  /* inset:0 stretches to full viewport — no explicit height so dvh quirks can't shrink it */
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 999;
+  padding: 0;
 }
-#loadingScreen .logo-go      { color: var(--bone) !important; }
+/* Center the logo block inside the splash (mainMenu uses flex-start for side layout) */
+#loadingScreen .logo-stack-new { align-items: center !important; }
+/* Scale logo up — 2.1rem is designed for the compact mainMenu wordmark */
+#loadingScreen .logo-go,
+#loadingScreen .logo-against,
+#loadingScreen .logo-me      { font-size: 3.2rem !important; color: var(--bone) !important; }
 #loadingScreen .logo-against { color: var(--bone) !important; }
 #loadingScreen .logo-me      { color: var(--red)  !important; }
-#loadingScreen .logo-vs-box  { color: var(--red)  !important; border-color: var(--red) !important; }
+#loadingScreen .logo-vs-box  { color: var(--red)  !important; border-color: var(--red) !important; font-size: 0.85rem !important; }
 #loadingScreen .logo-tagline { color: var(--mute-2) !important; }
 .ls-main {
   flex: 1;

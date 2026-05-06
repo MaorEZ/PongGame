@@ -1138,32 +1138,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (_loadingDone) return;
         _loadingDone = true;
 
-        // Show the target screen before fading out loading screen
-        try {
-            if (!AppState.naming.isSet) {
-                const nameInput = document.getElementById('nameInput');
-                if (AppState.user.name && AppState.user.name !== 'Player') {
-                    if (nameInput) nameInput.value = AppState.user.name.replace(/[^a-zA-Z0-9_]/g, '');
-                }
-                const changesEl = document.getElementById('nameChangesLeft');
-                if (changesEl) changesEl.textContent = 'Name changes remaining: ' + AppState.naming.changesRemaining;
-                showScreen('nameSetupScreen');
-            } else {
-                showScreen('mainMenu');
+        const targetId = AppState.naming.isSet ? 'mainMenu' : 'nameSetupScreen';
+
+        // Prep name-setup content before showing
+        if (targetId === 'nameSetupScreen') {
+            const nameInput = document.getElementById('nameInput');
+            if (AppState.user.name && AppState.user.name !== 'Player') {
+                if (nameInput) nameInput.value = AppState.user.name.replace(/[^a-zA-Z0-9_]/g, '');
             }
-        } catch (e) {
-            console.error('Screen transition error:', e);
-            try { showScreen('mainMenu'); } catch (_) {}
+            const changesEl = document.getElementById('nameChangesLeft');
+            if (changesEl) changesEl.textContent = 'Name changes remaining: ' + AppState.naming.changesRemaining;
         }
 
-        // Ensure reconnect overlay doesn't block the initial screen
-        const overlay = document.getElementById('reconnectOverlay');
-        if (overlay) overlay.style.display = 'none';
+        // Show target screen — try/catch so a JS error can't leave us on blank
+        try {
+            showScreen(targetId);
+        } catch (e) {
+            console.error('showScreen failed:', e);
+        }
 
-        // Mark app as loaded now — overlay is gated on _hadSuccessfulConnection anyway
+        // Belt-and-suspenders: force the target element visible regardless of CSS cascade
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) targetEl.style.display = 'flex';
+
+        // Hide all overlays that could block the initial screen
+        ['reconnectOverlay', 'menuOverlay'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
         window._appLoaded = true;
 
-        // Hide loading screen in the same JS tick as showScreen so both paint together
+        // Hide loading screen in the same JS tick so both paint in one frame
         const ls = document.getElementById('loadingScreen');
         if (ls) ls.style.display = 'none';
     }
