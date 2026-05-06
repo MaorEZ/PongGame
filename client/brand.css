@@ -87,7 +87,7 @@ body::before, body::after { display: none !important; }
   color: var(--acid);
   letter-spacing: 0.18em;
   width: 100%;
-  max-width: 260px;
+  text-align: left;
   overflow: hidden;
   min-height: 18px;
 }
@@ -98,7 +98,7 @@ body::before, body::after { display: none !important; }
   width: 0;
   animation: lsTypeOn 0.5s steps(22, end) 1.1s forwards;
 }
-@keyframes lsTypeOn { to { width: 22ch; } }
+@keyframes lsTypeOn { to { width: calc(22ch + 3.78em); } }
 .ls-foot { padding: 0 24px 32px; }
 .ls-bar {
   height: 3px;
@@ -1146,10 +1146,11 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   border: none !important;
   border-radius: 0 !important;
   font-family: var(--mono-f) !important;
-  font-size: 16px !important;
+  font-size: 14px !important;
   font-weight: 700 !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
+  white-space: nowrap !important;
   cursor: pointer;
 }
 .rb-create-btn:active { transform: translate(2px,2px) !important; }
@@ -1815,6 +1816,10 @@ input::placeholder { color: var(--mute) !important; opacity: 0.6 !important; }
   bottom: 20px;
   left: 16px;
   z-index: 5000;
+}
+/* Lift chat bubble above the sticky create-room + practice buttons in room browser */
+body:has(#roomBrowserScreen.active) .cw-widget {
+  bottom: 160px;
 }
 .cw-panel {
   flex-direction: column;
