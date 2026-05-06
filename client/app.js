@@ -696,7 +696,10 @@ function showScreen(screenId) {
 
     // Hide all screens
     const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => screen.classList.remove('active'));
+    screens.forEach(screen => {
+        screen.classList.remove('active');
+        screen.style.display = '';
+    });
 
     // Stop paddle preview animations when leaving customization
     if (screenId !== 'customizationScreen' && typeof stopAllPaddlePreviews === 'function') {
@@ -712,6 +715,12 @@ function showScreen(screenId) {
     // Restart menu paddle animation when returning to main menu
     if (screenId === 'mainMenu' && typeof animateMenuPaddleBall === 'function') {
         animateMenuPaddleBall();
+    }
+
+    // Reveal chat widget once the main menu is shown
+    if (screenId === 'mainMenu') {
+        const cw = document.getElementById('chatWidget');
+        if (cw) cw.style.display = '';
     }
 
     console.log('Showing screen:', screenId);
