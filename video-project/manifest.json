@@ -1,0 +1,30 @@
+{
+  "title": "The AI Move That Made the World Champion Quit",
+  "resolution": "1920x1080",
+  "fps": 30,
+  "audio": [
+    {"scene": 1, "name": "s1_hook",       "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203504_8c2a92f6-c890-4edf-86a1-9129aab2af64.wav"},
+    {"scene": 2, "name": "s2_impossible", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203507_7a2a9a22-9f9c-483f-9061-2ed22d3c0f64.wav"},
+    {"scene": 3, "name": "s3_challenger", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203514_c5c285c1-d5ec-469e-a681-8154230434ab.wav"},
+    {"scene": 4, "name": "s4_game1",      "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203517_28a4405e-638b-4b74-a525-7327aea59139.wav"},
+    {"scene": 5, "name": "s5_move37",     "job_id": "cce72fe8-3531-4ca7-bbcd-ba2d7a685ecf", "url": "PENDING"},
+    {"scene": 6, "name": "s6_weight",     "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203539_b1d5818b-14e1-4610-b606-ec3d06cc3e2d.wav"},
+    {"scene": 7, "name": "s7_move78",     "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203545_71e4693b-d54d-47b3-a8a6-2516801a9c33.wav"},
+    {"scene": 8, "name": "s8_retirement", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203549_8e401534-47a0-4acf-9b9f-8428bbedc6cf.wav"},
+    {"scene": 9, "name": "s9_meaning",    "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3EmJTkh6kWPISGYud473X6xfPJy/hf_20260612_203554_bb5b96db-7de2-4441-9d54-1bd73ff74eb5.wav"}
+  ],
+  "clips_pending_jobs": [
+    {"name": "clip_hook_board",    "job_id": "66afd88a-3133-4a8a-baff-4d9439faf50e", "scene": 1},
+    {"name": "clip_press_room",    "job_id": "ad0b015c-e29e-41ea-b0e9-f811dd7db5eb", "scene": 1},
+    {"name": "clip_ancient_china", "job_id": "1cd1f407-358f-4406-8844-8e5bc9b76f19", "scene": 2},
+    {"name": "clip_neural_net",    "job_id": "45d745b8-9d72-439a-b434-6b0c4069aff8", "scene": 3},
+    {"name": "clip_seoul_night",   "job_id": "b98231f4-8919-4b5e-a3e3-e2dc820011b2", "scene": 4},
+    {"name": "clip_match_room",    "job_id": "0234f6d2-eff0-485d-9129-4f5c736883ae", "scene": 4},
+    {"name": "clip_move37",        "job_id": "4fe0079a-897e-4ec5-97e1-68a9083b53b5", "scene": 5},
+    {"name": "clip_walkout",       "job_id": "acef3812-edef-449d-be1e-2c0d4fce9dd0", "scene": 5}
+  ],
+  "clips_to_generate": [
+    {"name": "clip_move78_wedge", "scene": 7},
+    {"name": "clip_empty_board",  "scene": 8}
+  ]
+}
