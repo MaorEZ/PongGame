@@ -30,6 +30,12 @@ while read -r name url; do
   [ -s "images/$name.png" ] || curl -fsS -o "images/$name.png" "$url"
 done
 
+echo "== downloading music =="
+jq -r '(.music // [])[] | "\(.name) \(.url)"' manifest.json | \
+while read -r name url; do
+  [ -s "audio/$name.m4a" ] || curl -fsS -o "audio/$name.m4a" "$url"
+done
+
 # ---------- 2. Helpers ----------
 dur() { ffprobe -v error -show_entries format=duration -of csv=p=0 "$1"; }
 
@@ -104,11 +110,22 @@ for i in $(seq 0 $((n_scenes-1))); do
 done
 ffmpeg -y -v error -f concat -safe 0 -i segments/list.txt -c copy output/narration_cut.mp4
 
-# ---------- 5. Music bed (optional), ducked under VO ----------
-if [ -s audio/music_bed.wav ] || [ -s audio/music_bed.mp3 ]; then
-  MB=$(ls audio/music_bed.* | head -1)
-  ffmpeg -y -v error -i output/narration_cut.mp4 -stream_loop -1 -i "$MB" -filter_complex \
-    "[1:a]volume=0.16,apad[m];[0:a][m]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=400[mix];[0:a][mix]amix=inputs=2:duration=first:weights=1 0.9[a]" \
+# ---------- 5. Music beds: tense (scenes marked tense) -> outro, ducked under VO ----------
+if [ -s audio/music_tense.m4a ] && [ -s audio/music_outro.m4a ]; then
+  # Duration of the tense portion = sum of scene durations where music==tense
+  T1=0
+  for i in $(seq 0 $((n_scenes-1))); do
+    m=$(jq -r ".scene_layout[$i].music" manifest.json)
+    scene=$(jq -r ".scene_layout[$i].scene" manifest.json)
+    [ "$m" = "tense" ] && T1=$(echo "$T1 + $(dur segments/scene${scene}.mp4)" | bc)
+  done
+  TOT=$(dur output/narration_cut.mp4)
+  T2=$(echo "$TOT - $T1 + 4" | bc)   # outro length incl. crossfade headroom
+  ffmpeg -y -v error -stream_loop -1 -i audio/music_tense.m4a -stream_loop -1 -i audio/music_outro.m4a \
+    -filter_complex "[0:a]atrim=0:$T1[a0];[1:a]atrim=0:$T2[a1];[a0][a1]acrossfade=d=2[m]" \
+    -c:a aac audio/music_full.m4a
+  ffmpeg -y -v error -i output/narration_cut.mp4 -i audio/music_full.m4a -filter_complex \
+    "[1:a]volume=0.16,apad[m];[0:a][m]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=400[duck];[0:a][duck]amix=inputs=2:duration=first[a]" \
     -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 256k output/final.mp4
 else
   cp output/narration_cut.mp4 output/final.mp4
