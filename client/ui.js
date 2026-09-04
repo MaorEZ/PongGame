@@ -30,7 +30,7 @@ function hidePracticeModal() {
 // Global state for selected bet amount and game mode
 let selectedBetAmount = 0;
 let selectedGameMode = 'classic'; // 'classic' or 'chaotic'
-let selectedBudget = 100; // Budget filter for room browser
+let selectedBudget = 10; // Budget filter for room browser
 let currentMatchId = null;
 let roomPollingInterval = null;
 let rematchTimer = null;
@@ -117,8 +117,7 @@ function onTap(el, handler) {
 document.getElementById('playSquare').addEventListener('click', () => {
     hapticFeedback('medium');
     selectedGameMode = selectedGameMode || 'classic';
-    selectedBudget = selectedBudget || 100;
-    selectedBetAmount = selectedBudget;
+    if (!selectedBudget && selectedBudget !== 0) selectedBudget = 10;
     syncRoomBrowserUI();
     showScreen('roomBrowserScreen');
     requestRoomList();
@@ -129,18 +128,6 @@ document.getElementById('playSquare').addEventListener('click', () => {
 
 
 // Slide menu buttons
-document.getElementById('depositBtn').addEventListener('click', () => {
-    closeSlideMenu();
-    hapticFeedback('light');
-    showScreen('depositScreen');
-    syncDepositUI();
-});
-
-document.getElementById('playAIBtn').addEventListener('click', () => {
-    closeSlideMenu();
-    hapticFeedback('light');
-    showPracticeModal();
-});
 
 // === Room Browser Practice vs AI (inline, no modal) ===
 
@@ -181,7 +168,7 @@ document.querySelectorAll('.rb-pmode-btn').forEach(btn => {
 
 function syncRoomBrowserUI() {
     const mode = selectedGameMode || 'classic';
-    const stake = selectedBudget || 10;
+    const stake = selectedBudget; // 0 = FREE
 
     document.querySelectorAll('.rb-mode-btn:not(.rb-pmode-btn)').forEach(b => {
         b.classList.toggle('selected', b.dataset.mode === mode);
@@ -189,10 +176,16 @@ function syncRoomBrowserUI() {
     document.querySelectorAll('.rb-stake-btn').forEach(b => {
         b.classList.toggle('selected', parseInt(b.dataset.stake) === stake);
     });
+
     const createBtn = document.getElementById('createRoomBtn');
-    if (createBtn) createBtn.textContent = '+ CREATE ROOM AT $' + stake;
     const winEl = document.getElementById('rbWinPreview');
-    if (winEl) winEl.innerHTML = 'WIN <span style="color:var(--red);font-weight:700">$' + Math.round(stake * 1.9) + '</span>';
+    if (stake === 0) {
+        if (createBtn) createBtn.textContent = '+ CREATE FREE ROOM';
+        if (winEl) winEl.innerHTML = '<span style="color:var(--mute);font-weight:700">FREE PLAY</span>';
+    } else {
+        if (createBtn) createBtn.textContent = '+ CREATE ROOM AT $' + stake;
+        if (winEl) winEl.innerHTML = 'WIN <span style="color:var(--red);font-weight:700">$' + Math.round(stake * 1.9) + '</span>';
+    }
 
     // Dark theme when chaotic is selected
     const rbScreen = document.getElementById('roomBrowserScreen');
@@ -289,33 +282,40 @@ document.getElementById('createRoomBtn').addEventListener('click', () => {
         showNotification('You already have an active room! Cancel it first.');
         return;
     }
-    const betAmt = selectedBetAmount || selectedBudget || 10;
-    if (betAmt > AppState.user.balance) {
+    const betAmt = selectedBudget; // 0 = FREE
+    if (betAmt > 0 && betAmt > AppState.user.balance) {
         showNotification('Insufficient balance!');
         hapticFeedback('error');
         return;
     }
     const mode = selectedGameMode || 'classic';
-    // Populate confirm sheet
     const el = id => document.getElementById(id);
-    el('crcMode').textContent    = mode.toUpperCase();
-    el('crcStake').textContent   = '$' + betAmt;
-    el('crcWin').textContent     = '$' + Math.round(betAmt * 1.9);
-    el('crcConfirmAmt').textContent = '$' + betAmt;
+    el('crcMode').textContent = mode.toUpperCase();
+    if (betAmt === 0) {
+        el('crcStake').textContent      = 'FREE';
+        el('crcWin').textContent        = 'FREE';
+        el('crcConfirmAmt').textContent = 'FREE';
+    } else {
+        el('crcStake').textContent      = '$' + betAmt;
+        el('crcWin').textContent        = '$' + Math.round(betAmt * 1.9);
+        el('crcConfirmAmt').textContent = '$' + betAmt;
+    }
     const overlay = el('createRoomConfirm');
     overlay.style.display = 'flex';
     overlay.classList.add('active-overlay');
 });
 
 function doCreateRoom() {
+    // Unlock AudioContext during user gesture so sounds work in the match
+    if (typeof SFX !== 'undefined') SFX.init();
     const overlay = document.getElementById('createRoomConfirm');
     overlay.style.display = 'none';
     overlay.classList.remove('active-overlay');
-    const betAmt = selectedBetAmount || selectedBudget || 10;
+    const betAmt = selectedBudget; // 0 = FREE
     const mode = selectedGameMode || 'classic';
     const roomId = 'R' + Date.now().toString(36);
     activeRoom = { id: roomId, mode, amount: betAmt, playerName: AppState.user.name };
-    updateBalance(AppState.user.balance - betAmt);
+    if (betAmt > 0) updateBalance(AppState.user.balance - betAmt);
     sendToServer({ type: 'createGame', userId: AppState.user.id, betAmount: betAmt, gameMode: mode, roomId });
     requestRoomList();
     updateRoomBrowser([{ id: roomId, playerName: AppState.user.name, mode, amount: betAmt, playerId: AppState.user.id, isSelf: true }]);
@@ -379,8 +379,8 @@ document.getElementById('confirmCreateRoomBtn').addEventListener('click', () => 
             playerName: AppState.user.name
         };
 
-        // Deduct wager
-        updateBalance(AppState.user.balance - betAmt);
+        // Deduct wager (not for free rooms)
+        if (betAmt > 0) updateBalance(AppState.user.balance - betAmt);
 
         // Send to server
         sendToServer({
@@ -403,7 +403,7 @@ document.getElementById('confirmCreateRoomBtn').addEventListener('click', () => 
             isSelf: true
         }]);
 
-        showNotification('Room created! -$' + betAmt.toFixed(2));
+        showNotification(betAmt > 0 ? 'Room created! -$' + betAmt.toFixed(2) : 'Free room created!');
     }, 50);
 });
 
@@ -411,8 +411,7 @@ document.getElementById('confirmCreateRoomBtn').addEventListener('click', () => 
 function requestRoomList() {
     sendToServer({
         type: 'getGames',
-        gameMode: selectedGameMode,
-        maxBudget: selectedBudget
+        gameMode: selectedGameMode
     });
 }
 
@@ -457,17 +456,32 @@ function buildRoomCard(room, isSelf) {
         actionsHTML = `<button class="rb-join" data-id="${room.id}" data-amt="${room.amount}">Join</button>`;
     }
 
+    const amountDisplay = room.amount > 0 ? '$' + parseFloat(room.amount).toFixed(2) : 'FREE';
+
     card.innerHTML = `
         <div class="rb-avatar">${escapeHtml(initials)}</div>
         <div class="rb-card-info">
-            <div class="rb-card-name">${isSelf ? 'Your Room' : escapeHtml(room.playerName)}</div>
+            <div class="rb-card-name">${escapeHtml(room.playerName)}</div>
             <div class="rb-card-meta">${escapeHtml(modeLabel)}</div>
         </div>
-        <div class="rb-card-amount">$${parseFloat(room.amount).toFixed(2)}</div>
+        <div class="rb-card-amount">
+            <span class="rb-amount-value">${amountDisplay}</span>${!isSelf ? `<span class="rb-ping-label"></span>` : ''}
+        </div>
         ${actionsHTML}
     `;
     return card;
 }
+
+function refreshRoomPings() {
+    const pingMs = window._pingMs || 0;
+    if (!pingMs) return;
+    const pingColor = pingMs < 85 ? '#4fd1c5' : pingMs < 100 ? '#f59e0b' : '#ef4444';
+    document.querySelectorAll('.rb-ping-label').forEach(el => {
+        el.textContent = pingMs + 'ms';
+        el.style.color = pingColor;
+    });
+}
+setInterval(refreshRoomPings, 500);
 
 // Update room browser UI
 function updateRoomBrowser(rooms) {
@@ -477,15 +491,21 @@ function updateRoomBrowser(rooms) {
     myRoomSlot.innerHTML = '';
     roomList.innerHTML = '';
 
-    // Separate own room from others; filter other rooms to current mode
+    // Separate own room from others; filter by mode and stake
     const currentMode = selectedGameMode || 'classic';
+    const currentStake = selectedBudget; // 0 = FREE, >0 = show all rooms up to that amount
     let myRoom = null;
     const otherRooms = [];
     rooms.forEach(room => {
         if (room.isSelf || room.playerId === AppState.user.id) {
             myRoom = room;
-        } else if (!room.mode || room.mode === currentMode) {
-            otherRooms.push(room);
+        } else if (room.mode === currentMode) {
+            const roomAmt = room.amount || 0;
+            if (currentStake === 0) {
+                if (roomAmt === 0) otherRooms.push(room); // FREE tab: only free rooms
+            } else {
+                if (roomAmt > 0) otherRooms.push(room); // $ tab: all paid rooms visible
+            }
         }
     });
 
@@ -498,6 +518,10 @@ function updateRoomBrowser(rooms) {
 
     // Hide create button when user already has a room
     createBtn.style.display = myRoom ? 'none' : '';
+
+    // Update open rooms counter
+    const rbLabel = document.getElementById('rbRoomsLabel');
+    if (rbLabel) rbLabel.textContent = `▸ OPEN ROOMS · ${otherRooms.length}`;
 
     // Sort other rooms by amount (highest first)
     otherRooms.sort((a, b) => b.amount - a.amount);
@@ -523,6 +547,7 @@ function updateRoomBrowser(rooms) {
             joinRoom(room.id, room.amount);
         });
     });
+    refreshRoomPings();
 }
 
 // Cancel own room — remove immediately, then refund after server confirms
@@ -545,21 +570,27 @@ function cancelMyRoom() {
         matchId: roomId
     });
 
-    // Refund balance after server processes
+    // Refund balance after server processes (not for free rooms)
     setTimeout(() => {
-        updateBalance(AppState.user.balance + refundAmount);
-        showNotification('Room cancelled. +$' + refundAmount.toFixed(2) + ' refunded');
+        if (refundAmount > 0) {
+            updateBalance(AppState.user.balance + refundAmount);
+            showNotification('Room cancelled. +$' + refundAmount.toFixed(2) + ' refunded');
+        } else {
+            showNotification('Free room cancelled');
+        }
     }, 200);
 }
 
 // Join a room — non-blocking, no confirm dialog
 function joinRoom(roomId, betAmount) {
-    if (betAmount > AppState.user.balance) {
+    if (betAmount > 0 && betAmount > AppState.user.balance) {
         showNotification('Insufficient balance!');
         hapticFeedback('error');
         return;
     }
 
+    // Unlock AudioContext during user gesture so sounds work in the match
+    if (typeof SFX !== 'undefined') SFX.init();
     hapticFeedback('medium');
 
     // Disable all join buttons to prevent double-tap
@@ -568,8 +599,8 @@ function joinRoom(roomId, betAmount) {
         btn.textContent = 'Joining...';
     });
 
-    // Deduct wager from balance immediately
-    updateBalance(AppState.user.balance - betAmount);
+    // Deduct wager from balance immediately (not for free rooms)
+    if (betAmount > 0) updateBalance(AppState.user.balance - betAmount);
 
     sendToServer({
         type: 'joinGame',
@@ -580,7 +611,7 @@ function joinRoom(roomId, betAmount) {
     // Timeout — if server doesn't respond in 5s, re-enable buttons and refund
     window._joinTimeout = setTimeout(() => {
         showNotification('Join timed out. Try again.');
-        updateBalance(AppState.user.balance + betAmount);
+        if (betAmount > 0) updateBalance(AppState.user.balance + betAmount);
         document.querySelectorAll('.rb-join').forEach(btn => {
             btn.disabled = false;
             btn.textContent = 'Join';
@@ -647,6 +678,8 @@ function updateCountdownRing(secondsLeft) {
             status.textContent = 'ALMOST TIME...';
         }
     }
+
+    if (typeof SFX !== 'undefined') SFX.play('countdown');
 }
 
 // Mini paddle ball animation on the Play square
@@ -762,25 +795,6 @@ function animateMenuPaddleBall() {
 // Start the mini animation when page loads
 setTimeout(animateMenuPaddleBall, 100);
 
-document.getElementById('withdrawBtn').addEventListener('click', () => {
-    closeSlideMenu();
-    hapticFeedback('light');
-    showScreen('withdrawScreen');
-    syncWithdrawUI();
-});
-
-document.getElementById('customizationBtn').addEventListener('click', () => {
-    closeSlideMenu();
-    hapticFeedback('light');
-    // Show screen FIRST, then update UI + start animations after paint
-    showScreen('customizationScreen');
-    try {
-        updateCustomizationUI();
-    } catch (e) {
-        console.error('Customization UI error:', e);
-    }
-});
-
 document.getElementById('statsBtn').addEventListener('click', () => {
     closeSlideMenu();
     hapticFeedback('light');
@@ -838,6 +852,7 @@ document.getElementById('backFromWithdraw').addEventListener('click', () => {
 
 document.getElementById('backToMenuBtn').addEventListener('click', () => {
     hapticFeedback('light');
+    if (rematchTimer) { clearInterval(rematchTimer); rematchTimer = null; }
     const isAIResult = document.getElementById('backToMenuBtn').dataset.aiResult === 'true';
     if (isAIResult) {
         // Return to room browser so they can play again or find a match
@@ -1081,61 +1096,46 @@ document.getElementById('filterAmount').addEventListener('change', () => {
     requestGamesList();
 });
 
-// Copy deposit address
-document.getElementById('copyAddressBtn').addEventListener('click', () => {
-    const address = document.getElementById('depositAddress').textContent;
-    const btn = document.getElementById('copyAddressBtn');
-
+// Generic clipboard copy helper
+function copyToClipboard(text, btn, defaultLabel) {
     const onCopied = () => {
         hapticFeedback('success');
         btn.textContent = '✓ COPIED';
         btn.classList.add('copied');
         setTimeout(() => {
-            btn.textContent = '⎘ COPY ADDRESS';
+            btn.textContent = defaultLabel;
             btn.classList.remove('copied');
         }, 1400);
     };
-
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(address).then(onCopied).catch(err => {
-            console.error('Failed to copy:', err);
-        });
+        navigator.clipboard.writeText(text).then(onCopied).catch(() => {});
     } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = address;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            onCopied();
-        } catch (err) {
-            console.error('Failed to copy:', err);
-        }
-        document.body.removeChild(textArea);
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); onCopied(); } catch (_) {}
+        document.body.removeChild(ta);
     }
+}
+
+// Copy deposit address
+document.getElementById('copyAddressBtn').addEventListener('click', () => {
+    const address = document.getElementById('depositAddress').textContent;
+    copyToClipboard(address, document.getElementById('copyAddressBtn'), '⎘ COPY ADDRESS');
 });
 
-// Confirm deposit
+// Copy deposit memo
+document.getElementById('copyMemoBtn').addEventListener('click', () => {
+    const memo = document.getElementById('depositMemo').textContent;
+    copyToClipboard(memo, document.getElementById('copyMemoBtn'), '⎘ COPY MEMO');
+});
+
+// Confirm deposit — just closes screen; the tonapi.io webhook credits automatically
 document.getElementById('confirmDepositBtn').addEventListener('click', () => {
-    const raw = document.getElementById('depositAmountInput').value.replace(/[^0-9.]/g, '');
-    const amount = parseFloat(raw);
-
-    if (!amount || amount <= 0) {
-        showNotification('Please enter a valid amount');
-        return;
-    }
-
-    hapticFeedback('medium');
-    showNotification('Deposit feature will be integrated with TON wallet');
-
-    sendToServer({
-        type: 'deposit',
-        userId: AppState.user.id,
-        amount: amount
-    });
-
-    depositAmt = 100;
-    syncDepositUI();
+    hapticFeedback('light');
+    showScreen('mainMenu');
+    showNotification('Your balance will update automatically once we detect your payment (~12s)');
 });
 
 // Live fee preview on withdraw amount input
@@ -1149,39 +1149,21 @@ document.getElementById('confirmWithdrawBtn').addEventListener('click', () => {
     const raw = document.getElementById('withdrawAmount').value.replace(/[^0-9.]/g, '');
     const amount = parseFloat(raw);
 
-    if (!address) {
-        showNotification('Please enter a wallet address');
-        return;
-    }
-
-    if (!amount || amount <= 0) {
-        showNotification('Please enter a valid amount');
-        return;
-    }
-
-    if (amount > AppState.user.balance) {
-        showNotification('Insufficient balance');
-        return;
-    }
+    if (!address) { showNotification('Please enter a wallet address'); return; }
+    if (!amount || amount <= 0) { showNotification('Please enter a valid amount'); return; }
+    if (amount > AppState.user.balance) { showNotification('Insufficient balance'); return; }
 
     hapticFeedback('medium');
 
-    showConfirm(`Withdraw $${amount.toFixed(2)} to ${address.substring(0, 10)}...?`, (confirmed) => {
-        if (confirmed) {
-            sendToServer({
-                type: 'withdraw',
-                userId: AppState.user.id,
-                address: address,
-                amount: amount
-            });
+    const btn = document.getElementById('confirmWithdrawBtn');
+    btn.disabled = true;
+    btn.textContent = 'SENDING...';
 
-            document.getElementById('withdrawAddress').value = '';
-            document.getElementById('withdrawAmount').value = '$50';
-            updateWithdrawState();
-
-            showNotification('Withdrawal request submitted');
-            showScreen('mainMenu');
-        }
+    sendToServer({
+        type: 'requestWithdrawal',
+        userId: AppState.user.id,
+        toAddress: address,
+        amount: amount
     });
 });
 
@@ -1475,12 +1457,6 @@ function startAIGame() {
 }
 
 // Back button handlers for new screens
-document.getElementById('backFromCustomization').addEventListener('click', () => {
-    hapticFeedback('light');
-    stopAllPaddlePreviews();
-    showScreen('mainMenu');
-});
-
 document.getElementById('backFromStats').addEventListener('click', () => {
     hapticFeedback('light');
     showScreen('mainMenu');
@@ -1491,415 +1467,35 @@ document.getElementById('backFromLeaderboard').addEventListener('click', () => {
     showScreen('mainMenu');
 });
 
-// === Paddle Customization System (Animated Previews - Lightweight) ===
+// === Stats / Match History / Leaderboard ===
 
-// Animation state
-let previewAnimId = null;
-let previewRunning = false;
-const PREVIEW_FPS = 16;
-const PREVIEW_INTERVAL = 1000 / PREVIEW_FPS;
-let previewLastFrame = 0;
 
-// Cached canvas contexts (avoid DOM lookup every frame)
-const previewCache = {};
 
-// Sakura petal particles (persistent, recycled)
-const sakuraPetals = [];
-for (let i = 0; i < 5; i++) {
-    sakuraPetals.push({
-        x: Math.random() * 80, y: Math.random() * 50,
-        vy: 0.15 + Math.random() * 0.2,
-        rot: Math.random() * 6.28, rotSpd: (Math.random() - 0.5) * 0.02,
-        size: 1.5 + Math.random() * 2, alpha: 0.3 + Math.random() * 0.4
-    });
-}
-
-// Draw capsule shape path (no shadowBlur anywhere)
-function previewCapsulePath(ctx, px, py, pw, ph) {
-    const r = ph / 2;
-    ctx.beginPath();
-    ctx.moveTo(px + r, py);
-    ctx.lineTo(px + pw - r, py);
-    ctx.arc(px + pw - r, py + r, r, -Math.PI / 2, Math.PI / 2);
-    ctx.lineTo(px + r, py + ph);
-    ctx.arc(px + r, py + r, r, Math.PI / 2, -Math.PI / 2);
-    ctx.closePath();
-}
-
-// Get or create cached context for a skin
-function getPreviewCtx(skinName) {
-    if (previewCache[skinName]) return previewCache[skinName];
-    const canvas = document.getElementById(skinName + 'Preview');
-    if (!canvas) return null;
-    const entry = { canvas: canvas, ctx: canvas.getContext('2d') };
-    previewCache[skinName] = entry;
-    return entry;
-}
-
-// Draw animated skin preview - NO shadowBlur, lightweight effects only
-function drawSkinPreview(skinName, t) {
-    const c = getPreviewCtx(skinName);
-    if (!c) return;
-    const ctx = c.ctx;
-    const cw = c.canvas.width, ch = c.canvas.height;
-    ctx.clearRect(0, 0, cw, ch);
-
-    const px = cw / 2 - 40, py = ch / 2 - 8, pw = 80, ph = 16;
-
-    switch (skinName) {
-        case 'basic': {
-            // Pearl white with sliding shimmer
-            const shimX = ((t / 8) % (pw + 30)) - 15;
-            const grad = ctx.createLinearGradient(px, py, px + pw, py);
-            grad.addColorStop(0, '#d4c5b0');
-            grad.addColorStop(0.3, '#ede4d8');
-            grad.addColorStop(0.5, '#f5efe8');
-            grad.addColorStop(0.7, '#ede4d8');
-            grad.addColorStop(1, '#d4c5b0');
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = grad;
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            // Sliding highlight
-            ctx.save();
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.clip();
-            const shGrad = ctx.createLinearGradient(px + shimX - 10, py, px + shimX + 10, py);
-            shGrad.addColorStop(0, 'rgba(255,255,255,0)');
-            shGrad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
-            shGrad.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = shGrad;
-            ctx.fillRect(px + shimX - 10, py, 20, ph);
-            ctx.restore();
-            break;
-        }
-        case 'frost': {
-            // Icy gradient with animated crystals
-            const grad = ctx.createLinearGradient(px, py, px + pw, py);
-            grad.addColorStop(0, '#a5d8ff');
-            grad.addColorStop(0.3, '#e7f5ff');
-            grad.addColorStop(0.5, '#ffffff');
-            grad.addColorStop(0.7, '#e7f5ff');
-            grad.addColorStop(1, '#a5d8ff');
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = grad;
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            // Animated frost crystals (grow/shrink) - bigger & faster
-            for (let i = 0; i < 6; i++) {
-                const cx = px + ((i + 0.5) / 6) * pw;
-                const crystalH = 3 + Math.sin(t / 3 + i * 1.2) * 4;
-                ctx.strokeStyle = 'rgba(165,216,255,' + (0.5 + Math.sin(t / 4 + i) * 0.3) + ')';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.moveTo(cx, py); ctx.lineTo(cx - 1.5, py - crystalH); ctx.lineTo(cx + 1.5, py - crystalH); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(cx, py + ph); ctx.lineTo(cx - 1.5, py + ph + crystalH); ctx.lineTo(cx + 1.5, py + ph + crystalH); ctx.stroke();
-            }
-            // Floating ice motes - bigger, faster, more visible
-            for (let i = 0; i < 4; i++) {
-                const mx = px + 8 + ((t / 5 + i * 22) % 64);
-                const my = py - 5 - Math.sin(t / 6 + i * 2) * 5;
-                const ma = 0.5 + Math.sin(t / 4 + i) * 0.3;
-                ctx.fillStyle = 'rgba(200,230,255,' + ma + ')';
-                ctx.beginPath();
-                ctx.arc(mx, my, 2, 0, 6.28);
-                ctx.fill();
-            }
-            break;
-        }
-        case 'void': {
-            // Dark core with pulsing purple
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = '#0a0015';
-            ctx.fill();
-            // Pulsing inner gradient
-            const pulseA = 0.3 + Math.sin(t / 5) * 0.15;
-            const vGrad = ctx.createRadialGradient(px + pw / 2, py + ph / 2, 0, px + pw / 2, py + ph / 2, pw / 2);
-            vGrad.addColorStop(0, 'rgba(15,0,30,0.8)');
-            vGrad.addColorStop(0.6, 'rgba(60,0,120,' + pulseA + ')');
-            vGrad.addColorStop(1, 'rgba(124,58,237,0.15)');
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = vGrad;
-            ctx.fill();
-            // Pulsing border
-            ctx.strokeStyle = 'rgba(167,139,250,' + (0.5 + Math.sin(t / 4) * 0.2) + ')';
-            ctx.lineWidth = 2;
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.stroke();
-            // Rotating gravitational rings
-            for (let r = 0; r < 2; r++) {
-                const ringOff = Math.sin(t / 6 + r * 3) * 3;
-                ctx.strokeStyle = 'rgba(124,58,237,' + (0.2 - r * 0.06) + ')';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.ellipse(px + pw / 2, py + ph / 2 + ringOff, pw / 2 + 4 + r * 4, ph / 2 + 4 + r * 3, 0, 0, 6.28);
-                ctx.stroke();
-            }
-            // Void wisps pulled inward
-            for (let i = 0; i < 3; i++) {
-                const angle = t / 8 + i * 2.1;
-                const dist = 12 + Math.sin(t / 3 + i) * 4;
-                const wx = px + pw / 2 + Math.cos(angle) * dist;
-                const wy = py + ph / 2 + Math.sin(angle) * (dist * 0.5);
-                ctx.fillStyle = 'rgba(167,139,250,0.4)';
-                ctx.beginPath();
-                ctx.arc(wx, wy, 1.5, 0, 6.28);
-                ctx.fill();
-            }
-            break;
-        }
-        case 'sakura': {
-            // Pink gradient with shimmer
-            const shimmer = 0.15 + Math.sin(t / 4) * 0.1;
-            const grad = ctx.createLinearGradient(px, py, px + pw, py);
-            grad.addColorStop(0, '#ffc0cb');
-            grad.addColorStop(0.3, '#ffb6c1');
-            grad.addColorStop(0.5, '#fff0f5');
-            grad.addColorStop(0.7, '#ffb6c1');
-            grad.addColorStop(1, '#ffc0cb');
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = grad;
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            // Animated shimmer highlight
-            previewCapsulePath(ctx, px + 8, py + 2, pw - 16, ph / 3);
-            ctx.fillStyle = 'rgba(255,255,255,' + shimmer + ')';
-            ctx.fill();
-            // Falling cherry blossom petals - faster fall & drift
-            for (let i = 0; i < sakuraPetals.length; i++) {
-                const p = sakuraPetals[i];
-                p.y += p.vy * 2.5;
-                p.x += Math.sin(p.y * 0.08 + i) * 0.5;
-                p.rot += p.rotSpd * 2;
-                if (p.y > 50) { p.y = -3; p.x = Math.random() * 80; }
-                ctx.save();
-                ctx.translate(px + p.x, py + ph + 3 + p.y);
-                ctx.rotate(p.rot);
-                ctx.fillStyle = 'rgba(255,182,193,' + p.alpha + ')';
-                ctx.beginPath();
-                ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, 6.28);
-                ctx.fill();
-                ctx.restore();
-            }
-            break;
-        }
-        case 'solar': {
-            // Blazing radial with animated flares
-            const grad = ctx.createRadialGradient(px + pw / 2, py + ph / 2, 0, px + pw / 2, py + ph / 2, pw / 2);
-            grad.addColorStop(0, '#fff8e1');
-            grad.addColorStop(0.3, '#ffd54f');
-            grad.addColorStop(0.7, '#ff8f00');
-            grad.addColorStop(1, '#e65100');
-            previewCapsulePath(ctx, px, py, pw, ph);
-            ctx.fillStyle = grad;
-            ctx.fill();
-            // Rotating corona flares - faster rotation & pulse
-            for (let i = 0; i < 7; i++) {
-                const angle = (i / 7) * 6.28 + t / 15;
-                const len = 5 + Math.sin(t / 3 + i * 1.5) * 3;
-                const fx = px + pw / 2 + Math.cos(angle) * (pw / 2.2);
-                const fy = py + ph / 2 + Math.sin(angle) * (ph / 1.5);
-                ctx.strokeStyle = 'rgba(255,183,77,' + (0.5 + Math.sin(t / 3 + i) * 0.3) + ')';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(fx, fy);
-                ctx.lineTo(fx + Math.cos(angle) * len, fy + Math.sin(angle) * len);
-                ctx.stroke();
-            }
-            // Pulsing core glow
-            const coreA = 0.25 + Math.sin(t / 3) * 0.15;
-            previewCapsulePath(ctx, px + pw * 0.25, py + 2, pw * 0.5, ph / 3);
-            ctx.fillStyle = 'rgba(255,255,255,' + coreA + ')';
-            ctx.fill();
-            // Floating solar sparks - faster orbit
-            for (let i = 0; i < 3; i++) {
-                const sa = t / 6 + i * 2.1;
-                const sd = 14 + Math.sin(t / 4 + i * 3) * 5;
-                const sx = px + pw / 2 + Math.cos(sa) * sd;
-                const sy = py + ph / 2 + Math.sin(sa) * (sd * 0.4);
-                ctx.fillStyle = 'rgba(255,200,50,' + (0.4 + Math.sin(t / 3 + i) * 0.2) + ')';
-                ctx.beginPath();
-                ctx.arc(sx, sy, 1.3, 0, 6.28);
-                ctx.fill();
-            }
-            break;
-        }
-    }
-}
-
-// Animation loop - 16fps, lightweight
-let previewFrameCount = 0;
-function previewAnimLoop(timestamp) {
-    if (!previewRunning) { previewAnimId = null; return; }
-    if (timestamp - previewLastFrame < PREVIEW_INTERVAL) {
-        previewAnimId = requestAnimationFrame(previewAnimLoop);
-        return;
-    }
-    previewLastFrame = timestamp;
-    previewFrameCount++;
-    const skins = ['basic', 'frost', 'void', 'sakura', 'solar'];
-    for (let i = 0; i < skins.length; i++) {
-        try { drawSkinPreview(skins[i], previewFrameCount); } catch (e) { /* skip broken frame */ }
-    }
-    previewAnimId = requestAnimationFrame(previewAnimLoop);
-}
-
-function startAllPaddlePreviews() {
-    if (previewRunning) return;
-    previewRunning = true;
-    previewFrameCount = 0;
-    previewLastFrame = 0;
-    // Clear cache in case canvases were replaced
-    for (const k in previewCache) delete previewCache[k];
-    previewAnimId = requestAnimationFrame(previewAnimLoop);
-}
-
-function stopAllPaddlePreviews() {
-    previewRunning = false;
-    if (previewAnimId) { cancelAnimationFrame(previewAnimId); previewAnimId = null; }
-}
-
-// Customization UI Update
-function updateCustomizationUI() {
-    // Start animated previews (stops existing if any)
-    stopAllPaddlePreviews();
-    setTimeout(startAllPaddlePreviews, 100);
-
-    const isUnlocked = (skin) => skin === 'default' || AppState.customization.unlockedSkins.includes(skin);
-    const currentSkin = AppState.customization.selectedSkin || 'default';
-
-    // Helper: set up equip button
-    function setupEquipBtn(btnId, skinId, cardId, owned) {
-        const btn = document.getElementById(btnId);
-        const card = document.getElementById(cardId);
-        if (!btn || !card) return;
-
-        const isEquipped = currentSkin === skinId;
-        card.classList.toggle('equipped', isEquipped);
-
-        if (owned) {
-            btn.disabled = isEquipped;
-            btn.textContent = isEquipped ? 'Equipped' : 'Equip';
-            btn.style.display = '';
-        } else {
-            btn.disabled = true;
-            btn.textContent = 'Locked';
-        }
-
-        if (!btn.hasAttribute('data-init')) {
-            btn.addEventListener('click', () => {
-                if (selectPaddleSkin(skinId)) {
-                    updateCustomizationUI();
-                    hapticFeedback('light');
-                }
-            });
-            btn.setAttribute('data-init', 'true');
-        }
-    }
-
-    // Helper: set up try button (equips skin without owning it - temporary)
-    function setupTryBtn(btnId, skinId) {
-        const btn = document.getElementById(btnId);
-        if (!btn) return;
-        if (!btn.hasAttribute('data-init')) {
-            btn.addEventListener('click', () => {
-                // Force-equip the skin for testing (bypass ownership check)
-                AppState.customization.selectedSkin = skinId;
-                if (typeof Game !== 'undefined') Game.paddleSkin = skinId;
-                hapticFeedback('light');
-                showNotification(skinId === 'default' ? 'Trying: Basic' : 'Trying: ' + skinId.charAt(0).toUpperCase() + skinId.slice(1));
-                updateCustomizationUI();
-            });
-            btn.setAttribute('data-init', 'true');
-        }
-    }
-
-    // Basic Paddle (always available)
-    setupEquipBtn('equipBasic', 'default', 'basicSkinCard', true);
-    setupTryBtn('tryBasic', 'default');
-
-    // Frost Paddle (Purchase $10)
-    const isFrostOwned = isUnlocked('frost');
-    const frostPurchaseBtn = document.getElementById('purchaseFrost');
-    if (isFrostOwned) {
-        frostPurchaseBtn.style.display = 'none';
-    } else {
-        frostPurchaseBtn.style.display = '';
-        frostPurchaseBtn.textContent = 'Buy $10';
-    }
-    if (!frostPurchaseBtn.hasAttribute('data-init')) {
-        frostPurchaseBtn.addEventListener('click', () => {
-            if (purchasePaddle('frost')) {
-                updateCustomizationUI();
-            }
-        });
-        frostPurchaseBtn.setAttribute('data-init', 'true');
-    }
-    setupEquipBtn('equipFrost', 'frost', 'frostSkinCard', isFrostOwned);
-    setupTryBtn('tryFrost', 'frost');
-
-    // Void Paddle (Purchase $50)
-    const isVoidOwned = isUnlocked('void');
-    const voidPurchaseBtn = document.getElementById('purchaseVoid');
-    if (isVoidOwned) {
-        voidPurchaseBtn.style.display = 'none';
-    } else {
-        voidPurchaseBtn.style.display = '';
-        voidPurchaseBtn.textContent = 'Buy $50';
-    }
-    if (!voidPurchaseBtn.hasAttribute('data-init')) {
-        voidPurchaseBtn.addEventListener('click', () => {
-            if (purchasePaddle('void')) {
-                updateCustomizationUI();
-            }
-        });
-        voidPurchaseBtn.setAttribute('data-init', 'true');
-    }
-    setupEquipBtn('equipVoid', 'void', 'voidSkinCard', isVoidOwned);
-    setupTryBtn('tryVoid', 'void');
-
-    // Sakura Paddle (Wager Unlock $100)
-    const sakuraProgress = getUnlockProgress('sakura');
-    document.getElementById('sakuraProgress').textContent = Math.min(sakuraProgress.wagered, sakuraProgress.required).toFixed(2);
-    document.getElementById('sakuraProgressBar').style.width = sakuraProgress.progress + '%';
-    setupEquipBtn('equipSakura', 'sakura', 'sakuraSkinCard', isUnlocked('sakura'));
-    setupTryBtn('trySakura', 'sakura');
-
-    // Solar Paddle (Wager Unlock $500)
-    const solarProgress = getUnlockProgress('solar');
-    document.getElementById('solarProgress').textContent = Math.min(solarProgress.wagered, solarProgress.required).toFixed(2);
-    document.getElementById('solarProgressBar').style.width = solarProgress.progress + '%';
-    setupEquipBtn('equipSolar', 'solar', 'solarSkinCard', isUnlocked('solar'));
-    setupTryBtn('trySolar', 'solar');
-}
 
 // Stats UI Update
 function updateStatsUI() {
     const stats = AppState.stats;
-
-    document.getElementById('statWins').textContent = stats.wins;
-    document.getElementById('statLosses').textContent = stats.losses;
-    document.getElementById('statStreak').textContent = stats.longestStreak;
-    document.getElementById('statEarnings').textContent = '$' + stats.totalEarnings.toFixed(2);
-    document.getElementById('statWagered').textContent = '$' + stats.totalWagered.toFixed(2);
-
     const winRate = stats.wins + stats.losses > 0
         ? ((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)
         : 0;
+
+    document.getElementById('statWins').textContent    = stats.wins;
+    document.getElementById('statLosses').textContent  = stats.losses;
     document.getElementById('statWinRate').textContent = winRate + '%';
+    document.getElementById('statEarnings').textContent = '$' + stats.totalEarnings.toFixed(2);
+    document.getElementById('statWagered').textContent  = '$' + stats.totalWagered.toFixed(2);
+    document.getElementById('statStreak').textContent   = stats.longestStreak;
+
+    const eloEl = document.getElementById('statEloDisplay');
+    if (eloEl) eloEl.textContent = AppState.user.elo || 1000;
 }
 
 // Active leaderboard tab
 let activeLeaderboardTab = 'earnings';
 
-document.querySelectorAll('.leaderboard-tabs .tab-btn').forEach(btn => {
+document.querySelectorAll('.lb-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.leaderboard-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.lb-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         activeLeaderboardTab = btn.dataset.tab;
         if (window._leaderboardData) renderLeaderboard(window._leaderboardData);
@@ -1916,28 +1512,29 @@ function renderLeaderboard(data) {
     else players = data.byEarnings;
 
     if (!players || players.length === 0) {
-        list.innerHTML = '<div class="no-data">No players yet — be the first!</div>';
+        list.innerHTML = '<div class="lb-empty">▸ NO PLAYERS YET — BE THE FIRST!</div>';
         return;
     }
 
     players.forEach((player, index) => {
         const item = document.createElement('div');
         const isMe = player.name === AppState.user.name;
-        item.className = 'leaderboard-item' + (isMe ? ' highlight' : '');
+        item.className = 'lb-row' + (isMe ? ' lb-row--me' : '');
 
-        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '#' + (index + 1);
+        const rankLabel = index === 0 ? '#1' : index === 1 ? '#2' : index === 2 ? '#3' : '#' + (index + 1);
+        const rankClass = index < 3 ? ' lb-rank--top' + (index + 1) : '';
         let stat;
         if (activeLeaderboardTab === 'wins') stat = `${player.wins}W / ${player.losses}L`;
         else if (activeLeaderboardTab === 'elo') stat = `${player.elo} ELO`;
         else stat = `+$${(player.earnings || 0).toFixed(2)}`;
 
         const nameHtml = isMe
-            ? `${escapeHtml(player.name)} (You)`
-            : `<span style="cursor:pointer;color:#4fd1c5;text-decoration:underline;" onclick="openProfile('${escapeHtml(player.name)}')">${escapeHtml(player.name)}</span>`;
+            ? `${escapeHtml(player.name)} <span class="lb-you">YOU</span>`
+            : `<span class="lb-name-link" onclick="openProfile('${escapeHtml(player.name)}')">${escapeHtml(player.name)}</span>`;
         item.innerHTML = `
-            <div class="rank">${escapeHtml(medal)}</div>
-            <div class="player-name">${nameHtml}</div>
-            <div class="player-stats"><div>${escapeHtml(stat)}</div></div>
+            <div class="lb-rank${rankClass}">${escapeHtml(rankLabel)}</div>
+            <div class="lb-player">${nameHtml}</div>
+            <div class="lb-stat">${escapeHtml(stat)}</div>
         `;
         list.appendChild(item);
     });
@@ -2407,7 +2004,10 @@ function syncDepositUI() {
     if (credit) credit.textContent = '+$' + depositAmt;
 
     const btn = document.getElementById('confirmDepositBtn');
-    if (btn) btn.textContent = 'CONFIRM · DEPOSIT $' + depositAmt;
+    if (btn) btn.textContent = 'I\'VE SENT THE USDT · DONE';
+
+    // Request real wallet address + memo from server
+    sendToServer({ type: 'requestDeposit', userId: AppState.user.id });
 }
 
 document.querySelectorAll('.dep-amt-btn').forEach(btn => {

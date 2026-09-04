@@ -1,3 +1,10 @@
 node_modules/
 .env
 *.bat
+PROJECT_INFO.md
+
+# Design handoff artifacts — not part of the deploy
+ClaudeDesign/
+GoAgainstMeDesign_extracted/
+*.zip
+changes.txt

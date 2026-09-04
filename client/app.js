@@ -1,3 +1,77 @@
+// Language code → flag emoji map (Telegram sends language_code on initDataUnsafe)
+const LANG_FLAGS = {
+    ru:'🇷🇺', uk:'🇺🇦', be:'🇧🇾', kk:'🇰🇿', uz:'🇺🇿', ky:'🇰🇬', az:'🇦🇿',
+    he:'🇮🇱', ar:'🇸🇦', tr:'🇹🇷', fa:'🇮🇷',
+    en:'🇬🇧', de:'🇩🇪', fr:'🇫🇷', es:'🇪🇸', pt:'🇧🇷', it:'🇮🇹', nl:'🇳🇱',
+    vi:'🇻🇳', id:'🇮🇩', th:'🇹🇭', zh:'🇨🇳', ko:'🇰🇷', ja:'🇯🇵',
+    ro:'🇷🇴', pl:'🇵🇱', sv:'🇸🇪', fi:'🇫🇮', da:'🇩🇰', cs:'🇨🇿', hu:'🇭🇺',
+};
+window._langFlags = LANG_FLAGS;
+
+// Regional servers — add more entries here when new servers come online
+const SERVERS = [
+    { id: 'eu', label: 'EU', flag: '🇷🇴', location: 'Romania', httpBase: null, wsUrl: null },
+    // { id: 'us', label: 'US', flag: '🇺🇸', location: 'Virginia', httpBase: 'https://us.goagainstme.com', wsUrl: 'wss://us.goagainstme.com' },
+];
+
+async function measureServerPing(server) {
+    const base = server.httpBase || window.location.origin;
+    const start = performance.now();
+    try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 3000);
+        await fetch(base + '/healthz', { cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(timeout);
+        return Math.round(performance.now() - start);
+    } catch {
+        return 999;
+    }
+}
+
+async function selectBestServer() {
+    const results = await Promise.all(SERVERS.map(async s => {
+        const ping = await measureServerPing(s);
+        return { ...s, ping };
+    }));
+    results.sort((a, b) => a.ping - b.ping);
+    const best = results[0];
+    window._selectedServer = best;
+    window._serverPings = results;
+    if (best.wsUrl) {
+        window._selectedServerWsUrl = best.wsUrl;
+    } else {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        window._selectedServerWsUrl = window.location.protocol === 'https:'
+            ? `${proto}//${window.location.host}`
+            : `${proto}//${window.location.hostname}:3000`;
+    }
+    updateServerIndicator(best.ping);
+    return best;
+}
+
+function _pingColor(ms) {
+    if (ms < 99)  return '#22c55e';
+    if (ms < 150) return '#eab308';
+    return '#ef4444';
+}
+
+function updateServerIndicator(pingOverride) {
+    const ping   = pingOverride !== undefined ? pingOverride : (window._pingMs || 0);
+    const server = window._selectedServer || SERVERS[0];
+    const color  = _pingColor(ping);
+    ['serverIndicator', 'serverIndicatorRB'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = 'flex';
+        const flagEl = el.querySelector('.srv-flag');
+        const pingEl = el.querySelector('.srv-ping');
+        const dotEl  = el.querySelector('.srv-dot');
+        if (flagEl) flagEl.textContent = server.flag;
+        if (pingEl) pingEl.textContent = ping < 999 ? ping + 'ms' : '---';
+        if (dotEl)  dotEl.style.background = color;
+    });
+}
+
 // Global App State
 const AppState = {
     user: {
@@ -90,18 +164,21 @@ function initTelegram() {
 
 // Connect to WebSocket Server
 function connectToServer() {
-    // Use wss:// on HTTPS (production behind Nginx), ws:// on plain HTTP (local dev)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const serverUrl = window.location.protocol === 'https:'
-        ? `${protocol}//${window.location.host}`          // production: no port, proxied by Nginx
-        : `${protocol}//${window.location.hostname}:3000`; // local dev: explicit port
+    // Use pre-selected server URL (chosen by selectBestServer ping test), fall back to same-host
+    const serverUrl = window._selectedServerWsUrl || (() => {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return window.location.protocol === 'https:'
+            ? `${proto}//${window.location.host}`
+            : `${proto}//${window.location.hostname}:3000`;
+    })();
 
     try {
         AppState.socket = new WebSocket(serverUrl);
+        AppState.socket.binaryType = 'arraybuffer'; // enable binary frame support
 
         AppState.socket.onopen = () => {
-            console.log('Connected to game server');
             window._hadSuccessfulConnection = true;
+            startPingMeasurement();
             const overlay = document.getElementById('reconnectOverlay');
             if (overlay) overlay.style.display = 'none';
 
@@ -110,6 +187,7 @@ function connectToServer() {
                 type: 'register',
                 userId: AppState.user.id,
                 userName: AppState.user.name,
+                languageCode: window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code || 'en',
                 initData: window.Telegram?.WebApp?.initData || ''
             }));
 
@@ -125,9 +203,12 @@ function connectToServer() {
 
         AppState.socket.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
-                console.log('[WS<-]', data.type, data);
-                handleServerMessage(data);
+                if (event.data instanceof ArrayBuffer) {
+                    handleBinaryServerMessage(event.data);
+                } else {
+                    const data = JSON.parse(event.data);
+                    handleServerMessage(data);
+                }
             } catch (e) {
                 console.error('Failed to parse server message:', e);
             }
@@ -138,13 +219,17 @@ function connectToServer() {
         };
 
         AppState.socket.onclose = () => {
-            console.log('Disconnected — retrying in 2s');
             // Only show reconnect overlay after initial load AND a prior successful connection
             if (window._appLoaded && window._hadSuccessfulConnection) {
                 const overlay = document.getElementById('reconnectOverlay');
                 if (overlay) overlay.style.display = 'flex';
             }
-            setTimeout(() => connectToServer(), 2000);
+            if (!window._reconnectTimer) {
+                window._reconnectTimer = setTimeout(() => {
+                    window._reconnectTimer = null;
+                    connectToServer();
+                }, 2000);
+            }
         };
 
     } catch (error) {
@@ -155,19 +240,14 @@ function connectToServer() {
 
 // Handle messages from server
 function handleServerMessage(data) {
-    console.log('Server message:', data);
 
     switch (data.type) {
         case 'connected':
-            // Server welcome — safe point to verify DB init ran
-            console.log('[DB] WS connected. ME_DB=', window.ME_DB, 'supabase=', typeof window.supabase);
-            if (!window.ME_DB && typeof initPlayerDB === 'function') {
-                console.log('[DB] ME_DB not set yet — retrying initPlayerDB after connect');
-                initPlayerDB();
-            }
+            if (!window.ME_DB && typeof initPlayerDB === 'function') initPlayerDB();
             break;
 
         case 'ping':
+            // JSON ping fallback (primary path is now binary — see handleBinaryServerMessage)
             sendToServer({ type: 'pong', t: data.t });
             break;
 
@@ -231,6 +311,38 @@ function handleServerMessage(data) {
             updateBalance(data.balance);
             break;
 
+        case 'depositInfo': {
+            const addrEl = document.getElementById('depositAddress');
+            const memoEl = document.getElementById('depositMemo');
+            if (addrEl) addrEl.textContent = data.walletAddress || '';
+            if (memoEl) memoEl.textContent = data.memo || '';
+            break;
+        }
+
+        case 'depositConfirmed':
+            updateBalance(data.balance);
+            showNotification(`Deposit confirmed! +$${(data.amount || 0).toFixed(2)} USDT`);
+            hapticFeedback('success');
+            break;
+
+        case 'withdrawalResult':
+            if (data.success) {
+                updateBalance(AppState.user.balance); // balance was already updated via 'balance' msg
+                showNotification(`Withdrawal sent! $${(data.amount || 0).toFixed(2)} on its way`);
+                hapticFeedback('success');
+                showScreen('mainMenu');
+                document.getElementById('withdrawAddress').value = '';
+                document.getElementById('withdrawAmount').value = '$50';
+                if (typeof updateWithdrawState === 'function') updateWithdrawState();
+            } else {
+                showNotification('Withdrawal failed: ' + (data.reason || 'unknown error'));
+                hapticFeedback('error');
+            }
+            // Re-enable button
+            const wBtn = document.getElementById('confirmWithdrawBtn');
+            if (wBtn) { wBtn.disabled = false; if (typeof updateWithdrawState === 'function') updateWithdrawState(); }
+            break;
+
         case 'gamesList':
             updateGamesList(data.games);
             break;
@@ -258,6 +370,9 @@ function handleServerMessage(data) {
             break;
 
         case 'gameCreated':
+            if (data.game && typeof activeRoom !== 'undefined' && activeRoom) {
+                activeRoom.id = data.game.id;
+            }
             showNotification('Room created! Waiting for opponent...');
             break;
 
@@ -269,6 +384,7 @@ function handleServerMessage(data) {
                 clearInterval(waitingRoomTimer);
                 waitingRoomTimer = null;
             }
+            if (typeof stopRoomPolling === 'function') stopRoomPolling();
             showScreen('gameScreen');
             initGame(data.game);
             break;
@@ -297,6 +413,8 @@ function handleServerMessage(data) {
             if (window._joinTimeout) { clearTimeout(window._joinTimeout); window._joinTimeout = null; }
             // Clear active room (host's room is consumed)
             if (typeof activeRoom !== 'undefined') activeRoom = null;
+            // Init audio context on this user gesture (match joined) so SFX works in countdown
+            if (typeof SFX !== 'undefined') SFX.init();
             // Navigate to countdown screen and populate it
             showScreen('matchCountdownScreen');
             if (typeof populateCountdownScreen === 'function') {
@@ -327,22 +445,26 @@ function handleServerMessage(data) {
         case 'matchReady':
             // Server says both players matched — load game screen and report ready
             try {
-                console.log('[MATCH] matchReady received, loading game screen');
+                if (typeof stopRoomPolling === 'function') stopRoomPolling();
                 if (data.newBalance !== undefined) updateBalance(data.newBalance);
                 AppState.currentGame = data.game;
                 window._currentRoomId = data.game.id;
                 window.MATCH_ID  = null; // reset for this new match
                 window.OPP_DB_ID = null;
+                // Track whether a ring countdown screen preceded this matchReady.
+                // For rematch, there is none — raceCountdown will show the 5s overlay instead.
+                const _cdScreen = document.getElementById('matchCountdownScreen');
+                window._hadRingCountdown = _cdScreen && _cdScreen.classList.contains('active');
                 showScreen('gameScreen');
                 if (typeof initGame === 'function') {
                     initGame(data.game);
                 }
+                // Start rendering immediately — prevents blank canvas while waiting for raceCountdown
+                if (typeof startRenderLoop === 'function') startRenderLoop();
                 // Create DB match row (non-blocking)
                 createDBMatch();
                 // Initialize SFX early (needs user gesture context — we had tap on Join)
                 if (typeof SFX !== 'undefined') SFX.init();
-                // Tell server we're ready
-                console.log('[MATCH] Sending clientReady');
                 sendToServer({ type: 'clientReady', userId: AppState.user.id, roomId: data.game.id });
                 // Start resync timeout — if no raceCountdown within 8s, ask server
                 window._resyncTimeout = setTimeout(() => {
@@ -356,19 +478,26 @@ function handleServerMessage(data) {
 
         case 'matchStart':
             // Legacy fallback — treat as matchReady
-            console.log('[MATCH] Legacy matchStart, treating as matchReady');
             AppState.currentGame = data.game;
             showScreen('gameScreen');
             if (typeof initGame === 'function') initGame(data.game);
             break;
 
         case 'raceCountdown':
-            // 5-second NFS-style countdown before gameplay
             try {
-                console.log('[RACE] raceCountdown received, startAt=' + data.startAtEpochMs + ' serverTime=' + data.serverTime);
                 if (window._resyncTimeout) { clearTimeout(window._resyncTimeout); window._resyncTimeout = null; }
-                if (typeof showRaceCountdown === 'function') {
-                    showRaceCountdown(data.startAtEpochMs, data.durationMs, data.serverTime);
+                startPingMeasurement();
+                if (window._hadRingCountdown) {
+                    // Initial match — ring countdown already played, go straight to gameplay
+                    window._hadRingCountdown = false;
+                    if (typeof startGameplay === 'function') startGameplay();
+                } else {
+                    // Rematch — no ring countdown was shown, play the 5s race overlay now
+                    if (typeof showRaceCountdown === 'function') {
+                        showRaceCountdown(data.startAtEpochMs, data.durationMs, data.serverTime);
+                    } else if (typeof startGameplay === 'function') {
+                        startGameplay();
+                    }
                 }
             } catch (e) {
                 console.error('[RACE] raceCountdown handler error:', e);
@@ -378,14 +507,24 @@ function handleServerMessage(data) {
         case 'gameplayStart':
             // Server confirms gameplay — start immediately
             try {
-                console.log('[GAME] gameplayStart received');
                 if (window._resyncTimeout) { clearTimeout(window._resyncTimeout); window._resyncTimeout = null; }
+                startPingMeasurement();
                 if (typeof startGameplay === 'function') {
                     startGameplay();
+                }
+                // Re-send roundReady in case the server only just set up roundReadyFlags
+                // (fallback path: clients were slow and server sent gameplayStart manually)
+                const _gpGameId = AppState.currentGame && AppState.currentGame.id;
+                if (_gpGameId && typeof Game !== 'undefined' && !Game.isAIGame) {
+                    sendToServer({ type: 'roundReady', gameId: _gpGameId, userId: AppState.user.id });
                 }
             } catch (e) {
                 console.error('[GAME] gameplayStart handler error:', e);
             }
+            break;
+
+        case 'echo':
+            // JSON echo fallback (primary path is now binary — see handleBinaryServerMessage)
             break;
 
         case 'roundCooldown':
@@ -419,6 +558,7 @@ function handleServerMessage(data) {
             if (data.newElo !== undefined) AppState.user.elo = data.newElo;
             if (data.matchesPlayed !== undefined) AppState.user.matchesPlayed = data.matchesPlayed;
             if (data.fairReveal) verifyProvablyFair(data.fairReveal);
+            stopPingMeasurement();
             try {
                 if (typeof activeRoom !== 'undefined') activeRoom = null;
                 if (typeof onGameOver === 'function') onGameOver(data);
@@ -687,8 +827,6 @@ function updateBalance(balance) {
 
 // Screen Navigation
 function showScreen(screenId) {
-    console.log('[NAV] showScreen called:', screenId);
-
     // Reset scroll position so every screen starts at the top
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
@@ -700,11 +838,6 @@ function showScreen(screenId) {
         screen.classList.remove('active');
         screen.style.display = '';
     });
-
-    // Stop paddle preview animations when leaving customization
-    if (screenId !== 'customizationScreen' && typeof stopAllPaddlePreviews === 'function') {
-        stopAllPaddlePreviews();
-    }
 
     // Show target screen
     const targetScreen = document.getElementById(screenId);
@@ -722,8 +855,6 @@ function showScreen(screenId) {
         const cw = document.getElementById('chatWidget');
         if (cw) cw.style.display = '';
     }
-
-    console.log('Showing screen:', screenId);
 }
 
 // Show notification — non-blocking DOM toast (never use alert/showAlert which freeze JS)
@@ -785,6 +916,73 @@ function hapticFeedback(type = 'light') {
                 AppState.telegram.HapticFeedback.notificationOccurred('error');
                 break;
         }
+    }
+}
+
+// Ping measurement — binary echo every 500ms using performance.now() for sub-ms precision
+window._pingMs = 0;
+let _pingInterval = null;
+function _sendBinaryEcho() {
+    const buf = new ArrayBuffer(9);
+    const view = new DataView(buf);
+    view.setUint8(0, 3); // echo type
+    view.setFloat64(1, performance.now(), true); // LE, performance.now() for sub-ms precision
+    sendBinaryRaw(buf);
+}
+function startPingMeasurement() {
+    if (_pingInterval) return;
+    _pingInterval = setInterval(_sendBinaryEcho, 500);
+    _sendBinaryEcho(); // immediate first measurement
+}
+function stopPingMeasurement() {
+    if (_pingInterval) { clearInterval(_pingInterval); _pingInterval = null; }
+    window._pingMs = 0;
+}
+
+// Send raw binary buffer to server (used by game.js for binary paddle/ping messages)
+function sendBinaryRaw(buf) {
+    if (AppState.socket && AppState.socket.readyState === WebSocket.OPEN) {
+        AppState.socket.send(buf);
+    }
+}
+window.sendBinaryRaw = sendBinaryRaw;
+
+// Handle binary frames from server
+// Server→Client types: 1=gameState(37b), 2=ping(9b), 3=echoReply(9b)
+function handleBinaryServerMessage(buffer) {
+    const view = new DataView(buffer);
+    const type = view.getUint8(0);
+
+    if (type === 1 && buffer.byteLength >= 37) {
+        // Binary gameState — most frequent message (60fps)
+        const state = {
+            ball: {
+                x:       view.getFloat32(1,  true),
+                y:       view.getFloat32(5,  true),
+                speedX:  view.getFloat32(9,  true),
+                speedY:  view.getFloat32(13, true)
+            },
+            paddle1X: view.getFloat32(17, true),
+            paddle2X: view.getFloat32(21, true),
+            ramp:     view.getFloat32(25, true),
+            t:        view.getFloat64(29, true)
+        };
+        if (typeof applyServerGameState === 'function') applyServerGameState(state);
+    } else if (type === 2 && buffer.byteLength >= 9) {
+        // Binary ping from server — reply with pong immediately
+        const t = view.getFloat64(1, true);
+        const pong = new ArrayBuffer(9);
+        const pv = new DataView(pong);
+        pv.setUint8(0, 2);
+        pv.setFloat64(1, t, true);
+        sendBinaryRaw(pong);
+    } else if (type === 3 && buffer.byteLength >= 9) {
+        // Binary echoReply — compute RTT with sub-ms precision
+        const t = view.getFloat64(1, true);
+        const rawPing = Math.round(performance.now() - t);
+        window._pingMs = Math.round(window._pingMs ? window._pingMs * 0.65 + rawPing * 0.35 : rawPing);
+        updateServerIndicator();
+        if (typeof refreshRoomPings === 'function') refreshRoomPings();
     }
 }
 
@@ -981,12 +1179,10 @@ function selectPaddleSkin(skinName) {
 // =============================================
 // SUPABASE DB HELPERS
 // =============================================
-console.log('[DB] DB module loaded');
 
 // B) Upsert current player into users table — called once at boot
 async function initPlayerDB() {
-    console.log('[DB] initPlayerDB called, supabase=', typeof window.supabase);
-    if (!window.supabase) { console.error('[DB] initPlayerDB — window.supabase is undefined! Check CDN script load order.'); return; }
+    if (!window.supabase) { console.error('[DB] supabase not loaded'); return; }
     try {
         const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
         let telegram_id, username;
@@ -1013,7 +1209,6 @@ async function initPlayerDB() {
 
         if (error) { console.error('[DB] initPlayerDB error:', error); return; }
         window.ME_DB = data;
-        console.log('[DB] ME_DB:', window.ME_DB);
     } catch (e) {
         console.error('[DB] initPlayerDB exception:', e);
     }
@@ -1021,17 +1216,13 @@ async function initPlayerDB() {
 
 // C) Create a match row when both players are confirmed and countdown begins
 async function createDBMatch() {
-    console.log('[DB] createDBMatch called, MATCH_ID=', window.MATCH_ID, 'ME_DB=', window.ME_DB);
-    if (window.MATCH_ID) { console.log('[DB] createDBMatch skipped — MATCH_ID already set'); return; }
-    if (!window.supabase) { console.error('[DB] createDBMatch — window.supabase undefined'); return; }
-    if (!window.ME_DB) {
-        console.warn('[DB] createDBMatch — ME_DB not ready, calling initPlayerDB');
-        await initPlayerDB();
-    }
-    if (!window.ME_DB) { console.error('[DB] createDBMatch — ME_DB unavailable, bailing'); return; }
+    if (window.MATCH_ID) return;
+    if (!window.supabase) return;
+    if (!window.ME_DB) await initPlayerDB();
+    if (!window.ME_DB) return;
 
     const game = AppState.currentGame;
-    if (!game) { console.error('[DB] createDBMatch — no AppState.currentGame'); return; }
+    if (!game) return;
 
     try {
         // Upsert real opponent so they have a users row
@@ -1046,10 +1237,8 @@ async function createDBMatch() {
             .single();
         if (oppErr) { console.error('[DB] createDBMatch — opponent upsert error:', oppErr); return; }
 
-        // Store opponent DB id so finishDBMatch can set correct winner when we lose
         window.OPP_DB_ID = opp.id;
 
-        // Insert match row
         const { data: match, error: matchErr } = await window.supabase
             .from('matches')
             .insert({
@@ -1063,7 +1252,6 @@ async function createDBMatch() {
         if (matchErr) { console.error('[DB] createDBMatch — insert error:', matchErr); return; }
 
         window.MATCH_ID = match.id;
-        console.log('[DB] MATCH_ID created:', window.MATCH_ID);
     } catch (e) {
         console.error('[DB] createDBMatch exception:', e);
     }
@@ -1071,10 +1259,7 @@ async function createDBMatch() {
 
 // D) Update match row to finished when game ends
 async function finishDBMatch(iWon) {
-    console.log('[DB] finishDBMatch called', { MATCH_ID: window.MATCH_ID, iWon });
-    if (!window.MATCH_ID) { console.warn('[DB] finishDBMatch — no MATCH_ID, skipping'); return; }
-    if (!window.ME_DB)    { console.warn('[DB] finishDBMatch — no ME_DB, skipping'); return; }
-    if (!window.supabase) { console.error('[DB] finishDBMatch — window.supabase undefined'); return; }
+    if (!window.MATCH_ID || !window.ME_DB || !window.supabase) return;
     const savedId  = window.MATCH_ID;
     const savedOpp = window.OPP_DB_ID;
     window.MATCH_ID   = null; // clear immediately so double-calls are no-ops
@@ -1088,7 +1273,6 @@ async function finishDBMatch(iWon) {
             .eq('id', savedId);
 
         if (error) { console.error('[DB] finishDBMatch error:', error); }
-        else        { console.log('[DB] match finished:', savedId, 'winner=', winner_id); }
     } catch (e) {
         console.error('[DB] finishDBMatch exception:', e);
     }
@@ -1116,8 +1300,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize Telegram
         initTelegram();
 
-        // Upsert player into Supabase (non-blocking)
-        console.log('[DB] calling initPlayerDB at boot');
         if (window.initPlayerDB) {
             window.initPlayerDB();
         } else {
@@ -1133,8 +1315,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize name setup UI
         initNameSetup();
 
-        // Connect to server
-        setTimeout(() => {
+        // Ping all servers, pick fastest, then connect
+        setTimeout(async () => {
+            await selectBestServer();
             connectToServer();
         }, 500);
     } catch (e) {

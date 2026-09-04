@@ -146,8 +146,6 @@ const Game = {
 
 // Initialize game
 function initGame(gameData) {
-    console.log('[GAME] initGame called', gameData);
-
     Game.canvas = document.getElementById('gameCanvas');
     Game.ctx = Game.canvas.getContext('2d');
     Game.gameId = gameData.id;
@@ -155,11 +153,6 @@ function initGame(gameData) {
     Game.isAIGame = gameData.isAIGame || false;
     Game.gameMode = gameData.gameMode || 'classic';
     Game.matchSeed = gameData.ballSeed || (Date.now() & 0xFFFFFF);
-    console.log('[ROLE] myId=' + AppState.user.id +
-        ' p1Id=' + gameData.player1Id + ' p2Id=' + gameData.player2Id +
-        ' isPlayer1=' + Game.isPlayer1 + ' matchSeed=' + Game.matchSeed);
-    console.log('[MAP] local=' + (Game.isPlayer1 ? 'bottom(paddle1)' : 'bottom(paddle2)') +
-        ' remote=' + (Game.isPlayer1 ? 'top(paddle2)' : 'top(paddle1)'));
 
     // Initialize chaotic mode state
     if (Game.gameMode === 'chaotic') {
@@ -183,6 +176,7 @@ function initGame(gameData) {
 
     // Set canvas size
     resizeCanvas();
+    window.removeEventListener('resize', resizeCanvas);
     window.addEventListener('resize', resizeCanvas);
 
     // Initialize positions
@@ -198,11 +192,20 @@ function initGame(gameData) {
     // Update game status
     document.getElementById('gameStatus').textContent = 'Get ready...';
 
+    // Stop any running game loop from a previous match before resetting flags.
+    // Without this, initGame → startRenderLoop could spawn a second RAF loop.
+    Game.isActive = false;
+    if (Game.animFrameId) { cancelAnimationFrame(Game.animFrameId); Game.animFrameId = null; }
+    Game.roundActive = false;
+    Game.localBall = null;
+
     // Reset per-match flags
     _gameplayStarted = false;
+    _gameLoopStarted = false;
     _loopTickCount = 0;
 
-    console.log('[GAME] initGame complete. You are player', Game.isPlayer1 ? '1' : '2');
+    // Multiplayer state buffer (interpolation)
+    Game.stateBuffer = [];
 }
 
 // Start game
@@ -237,6 +240,7 @@ function startGame(gameData) {
     }
 
     // Start game loop (renders background during countdown)
+    _gameLoopStarted = true;
     gameLoop();
 
     // Initialize sound system
@@ -269,7 +273,14 @@ function startGame(gameData) {
     numEl.offsetHeight;
     numEl.style.animation = '';
 
-    const countdownInterval = setInterval(() => {
+    Game._startCountdownInterval = setInterval(() => {
+        // If gameplay already started (e.g. raceCountdown arrived), abort stale countdown
+        if (_gameplayStarted) {
+            clearInterval(Game._startCountdownInterval);
+            Game._startCountdownInterval = null;
+            return;
+        }
+
         countdown--;
 
         if (countdown > 0) {
@@ -289,14 +300,18 @@ function startGame(gameData) {
             hapticFeedback('medium');
             SFX.play('go');
         } else {
-            clearInterval(countdownInterval);
+            clearInterval(Game._startCountdownInterval);
+            Game._startCountdownInterval = null;
             overlay.classList.remove('active');
             numEl.className = 'race-number';
 
-            // NOW start the actual game
-            Game.roundActive = true;
-            startGameTimer();
-            startRound();
+            if (Game.isAIGame) {
+                Game.roundActive = true;
+                startGameTimer();
+                startRound();
+            } else {
+                startGameplay(); // idempotent — no-op if raceCountdown already fired it
+            }
             document.getElementById('gameStatus').textContent = 'Game started!';
         }
     }, 1000);
@@ -350,8 +365,17 @@ function startRound() {
     if (!Game.isAIGame) {
         Game.roundActive = false; // activated by onRoundStart when server responds
         const gameId = AppState.currentGame && AppState.currentGame.id;
-        if (gameId) sendToServer({ type: 'roundReady', gameId, userId: AppState.user.id });
-        console.log('[ROUND] sent roundReady, waiting for roundStart from server');
+        if (gameId) {
+            sendToServer({ type: 'roundReady', gameId, userId: AppState.user.id });
+            // Retry once after 900ms in case the message was dropped
+            if (Game._roundReadyRetry) clearTimeout(Game._roundReadyRetry);
+            Game._roundReadyRetry = setTimeout(() => {
+                if (!Game.roundActive && AppState.currentGame && AppState.currentGame.id === gameId) {
+                    sendToServer({ type: 'roundReady', gameId, userId: AppState.user.id });
+                }
+                Game._roundReadyRetry = null;
+            }, 900);
+        }
         document.getElementById('gameStatus').textContent = 'Syncing...';
         return;
     }
@@ -1539,6 +1563,12 @@ function endMultiplayerGame() {
 
     if (Game.gameTimerInterval) clearInterval(Game.gameTimerInterval);
     if (Game.roundTimerInterval) { clearInterval(Game.roundTimerInterval); Game.roundTimerInterval = null; }
+    if (Game._roundResumeCountdown) { clearInterval(Game._roundResumeCountdown); Game._roundResumeCountdown = null; }
+    if (Game._roundCooldownDisplay) { clearInterval(Game._roundCooldownDisplay); Game._roundCooldownDisplay = null; }
+    Game._pendingRoundStart = null;
+    Game._awaitingCountdownEnd = false;
+    const _mpOverlay = document.getElementById('raceOverlay');
+    if (_mpOverlay) _mpOverlay.classList.remove('active');
 
     hapticFeedback('heavy');
 
@@ -1857,16 +1887,29 @@ function handleMouseLeave(e) {
 }
 
 // Send paddle position to server as a normalized 0-1 fraction of canvas width
-// This makes it device-independent — server maps to virtual world coords
 let _lastPaddleSendTime = 0;
+let _lastSentFraction = -1;
 function sendPaddlePosition(x) {
     if (Game.isAIGame) return;
     const now = performance.now();
-    if (now - _lastPaddleSendTime < 16) return; // cap at ~60fps to avoid flooding
-    _lastPaddleSendTime = now;
+    if (now - _lastPaddleSendTime < 16) return; // cap at ~60fps
     const myWidth = (Game.isPlayer1 ? Game.paddle1 : Game.paddle2).width;
     const fraction = Math.max(0, Math.min(1, x / (Game.canvas.width - myWidth)));
-    sendToServer({ type: 'paddleMove', gameId: Game.gameId, xFraction: fraction });
+    // Skip send if paddle hasn't meaningfully moved (saves bandwidth, reduces jitter)
+    if (Math.abs(fraction - _lastSentFraction) < 0.002) return;
+    _lastPaddleSendTime = now;
+    _lastSentFraction = fraction;
+    // Binary paddleMove: type=1 | xFraction f32 LE | t f64 LE  (13 bytes vs ~80 bytes JSON)
+    if (typeof sendBinaryRaw === 'function') {
+        const buf = new ArrayBuffer(13);
+        const dv = new DataView(buf);
+        dv.setUint8(0, 1);
+        dv.setFloat32(1, fraction, true);
+        dv.setFloat64(5, performance.now(), true);
+        sendBinaryRaw(buf);
+    } else {
+        sendToServer({ type: 'paddleMove', gameId: Game.gameId, xFraction: fraction });
+    }
 }
 
 // Update game state from server
@@ -2038,6 +2081,20 @@ function drawGameHUD() {
     ctx.fillText(pctVal + '%', w - 10, h * 0.5);
     ctx.shadowBlur = 0;
 
+    // === Ping display (left side, multiplayer only) ===
+    if (!Game.isAIGame) {
+        const pingMs = window._pingMs || 0;
+        let pr, pg, pb;
+        if (pingMs < 70)       { pr = 79;  pg = 209; pb = 197; } // teal  — good
+        else if (pingMs < 140) { pr = 255; pg = 200; pb = 50;  } // yellow — ok
+        else                   { pr = 255; pg = 80;  pb = 60;  } // red    — bad
+        const pingAlpha = pingMs > 0 ? 0.55 : 0.25;
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = `rgba(${pr}, ${pg}, ${pb}, ${pingAlpha})`;
+        ctx.fillText((pingMs || '—') + 'ms', 10, h * 0.5);
+    }
+
     // --- Round Timer on canvas (top-center) ---
     if (Game.roundTimeRemaining !== undefined && Game.roundTimeRemaining > 0) {
         const secs = Math.ceil(Game.roundTimeRemaining);
@@ -2070,17 +2127,99 @@ function gameLoop() {
         updateBallPhysics(); // runs for BOTH AI and multiplayer (guarded by roundActive)
         updateParticles();
 
-        // Multiplayer: extrapolate ball between server frames + lerp opponent paddle
-        if (!Game.isAIGame && Game.roundActive) {
-            if (Game.ball._svT !== undefined) {
-                const dt = (performance.now() - Game.ball._svT) * 60 / 1000; // frames elapsed
-                Game.ball.x = Game.ball._svX + Game.ball.speedX * Game.ball._ramp * dt;
-                Game.ball.y = Game.ball._svY + Game.ball.speedY * Game.ball._ramp * dt;
+        // Dead reckoning: advance local ball each frame, server sends velocity+position corrections.
+        // Both players run identical wall-bounce physics from the same server-seeded state,
+        // so they always see the same ball. Paddle collisions are server-authoritative only.
+        if (!Game.isAIGame && Game.roundActive && Game.localBall) {
+            const lb = Game.localBall;
+            const W  = Game.canvas.width;
+            const H  = Game.canvas.height;
+            const sx = W / SERVER_WORLD_W;
+            const sy = H / SERVER_WORLD_H;
+
+            const now = performance.now();
+            const dt  = Math.min(now - (lb._lastT || now), 33); // cap at ~2 server ticks
+            lb._lastT = now;
+            const step = dt / 16; // normalise to server tick (16 ms)
+
+            // Advance ramp locally (mirrors server: 0.3→1.0 over 3000ms from round start)
+            // Server corrections override ramp when they arrive, so this is just a fill-in
+            if (lb.ramp < 1.0) {
+                lb.ramp = Math.min(1.0, lb.ramp + (0.7 / 3000) * dt);
             }
-            const opp = Game.isPlayer1 ? Game.paddle2 : Game.paddle1;
-            if (opp._targetX !== undefined) {
-                opp.x += (opp._targetX - opp.x) * 0.3;
+
+            // Advance ball in world coordinates (capture pre-move position for swept collision)
+            const prevX = lb.x, prevY = lb.y;
+            lb.x += lb.speedX * lb.ramp * step;
+            lb.y += lb.speedY * lb.ramp * step;
+
+            // Wall bounces — left/right only (Y scoring is server-authoritative)
+            if (lb.x - 8 < 0)               { lb.x = 8;                     lb.speedX =  Math.abs(lb.speedX); }
+            if (lb.x + 8 > SERVER_WORLD_W)  { lb.x = SERVER_WORLD_W - 8;    lb.speedX = -Math.abs(lb.speedX); }
+
+            // Client-side own-paddle prediction — mirrors the server's swept collision EXACTLY
+            // (same crossing test, same bounce angle + speed) so the predicted bounce equals the
+            // authoritative one and the server correction is a near no-op.
+            // Swept (not point-in-window) detection is critical: at high ball speed the ball moves
+            // 30-40 world units per frame, so a point test can skip the paddle window entirely and
+            // the ball visibly passes through the paddle before the server snaps it back.
+            const _P1_Y = SERVER_WORLD_H - 30 - 16; // 554 — matches server P1_Y
+            const _P2_Y = 30;                         // matches server P2_Y
+            const _PH   = 16;                         // matches server PADDLE_H
+            const _BR   = 8;                          // ball radius — matches server BALL_R
+            const _MAXS = 20;                         // matches server MAX_SPEED
+            if (!lb._skipPrediction) {
+                if (Game.isPlayer1 && lb.speedY > 0) {
+                    // Bottom paddle: did the ball's lower edge cross the paddle's top this frame?
+                    const pBot = prevY + _BR, cBot = lb.y + _BR;
+                    const crossed = pBot <= _P1_Y && cBot >= _P1_Y;
+                    let cx = lb.x;
+                    if (crossed && cBot !== pBot) cx = prevX + (lb.x - prevX) * ((_P1_Y - pBot) / (cBot - pBot));
+                    const pwx = Game.paddle1.x / sx;
+                    if ((crossed || (cBot > _P1_Y && cBot < _P1_Y + _PH)) &&
+                        cx >= pwx - _BR && cx <= pwx + SERVER_PADDLE_W + _BR) {
+                        const relX  = Math.max(0, Math.min(1, (cx - pwx) / SERVER_PADDLE_W));
+                        const angle = (relX - 0.5) * (Math.PI / 3);
+                        const ns    = Math.min(_MAXS, Math.sqrt(lb.speedX * lb.speedX + lb.speedY * lb.speedY) + 11 * 0.08);
+                        lb.x = cx;
+                        lb.y = _P1_Y - _BR;
+                        lb.speedX = Math.sin(angle) * ns;
+                        lb.speedY = -Math.abs(Math.cos(angle) * ns);
+                        lb._localBounceAt = performance.now();
+                        _sendHitReport(cx, lb.y, lb.speedX, lb.speedY);
+                    }
+                } else if (!Game.isPlayer1 && lb.speedY < 0) {
+                    // Top paddle: did the ball's upper edge cross the paddle's bottom this frame?
+                    const p2Bot = _P2_Y + _PH;
+                    const pTop = prevY - _BR, cTop = lb.y - _BR;
+                    const crossed = pTop >= p2Bot && cTop <= p2Bot;
+                    let cx = lb.x;
+                    if (crossed && cTop !== pTop) cx = prevX + (lb.x - prevX) * ((p2Bot - pTop) / (cTop - pTop));
+                    const pwx = Game.paddle2.x / sx;
+                    if ((crossed || (cTop < p2Bot && cTop > _P2_Y)) &&
+                        cx >= pwx - _BR && cx <= pwx + SERVER_PADDLE_W + _BR) {
+                        const relX  = Math.max(0, Math.min(1, (cx - pwx) / SERVER_PADDLE_W));
+                        const angle = (relX - 0.5) * (Math.PI / 3);
+                        const ns    = Math.min(_MAXS, Math.sqrt(lb.speedX * lb.speedX + lb.speedY * lb.speedY) + 11 * 0.08);
+                        lb.x = cx;
+                        lb.y = p2Bot + _BR;
+                        lb.speedX = Math.sin(angle) * ns;
+                        lb.speedY = Math.abs(Math.cos(angle) * ns);
+                        lb._localBounceAt = performance.now();
+                        _sendHitReport(cx, lb.y, lb.speedX, lb.speedY);
+                    }
+                }
             }
+
+            // Write to visual ball (canvas coords)
+            Game.ball.x = lb.x * sx;
+            Game.ball.y = lb.y * sy;
+            Game.ball.trail.push({ x: Game.ball.x, y: Game.ball.y });
+            if (Game.ball.trail.length > 8) Game.ball.trail.shift();
+
+            // Speed HUD from local velocity (world-space magnitude)
+            const svrSpd = Math.sqrt(lb.speedX * lb.speedX + lb.speedY * lb.speedY);
+            Game.ball.accumulatedSpeedPct = Math.max(0, Math.round((svrSpd / 11 - 1) * 100));
         }
     } catch (e) {
         console.error('[LOOP] physics error:', e);
@@ -2097,8 +2236,13 @@ function gameLoop() {
 
     try {
         drawBackground();
-        drawCustomPaddle(Game.paddle1, '#c8ff00', Game.paddleSkin);
-        drawCustomPaddle(Game.paddle2, '#ff2e1f', 'default');
+        if (Game.isPlayer1) {
+            drawCustomPaddle(Game.paddle1, '#c8ff00', Game.paddleSkin);
+            drawCustomPaddle(Game.paddle2, '#ff2e1f', 'default');
+        } else {
+            drawCustomPaddle(Game.paddle1, '#ff2e1f', 'default');
+            drawCustomPaddle(Game.paddle2, '#c8ff00', Game.paddleSkin);
+        }
         drawChaoticVisuals();
         drawParticles();
         drawBall();
@@ -2145,22 +2289,20 @@ function drawBackground() {
     Game.ctx.fillStyle = '#0a0a0a';
     Game.ctx.fillRect(0, 0, w, h);
 
-    // Grid pattern (subtle bone)
+    // Grid pattern (subtle bone) — single batched path for perf
     Game.ctx.strokeStyle = 'rgba(244, 239, 230, 0.04)';
     Game.ctx.lineWidth = 1;
     const gridSize = 40;
+    Game.ctx.beginPath();
     for (let x = 0; x < w; x += gridSize) {
-        Game.ctx.beginPath();
         Game.ctx.moveTo(x, 0);
         Game.ctx.lineTo(x, h);
-        Game.ctx.stroke();
     }
     for (let y = 0; y < h; y += gridSize) {
-        Game.ctx.beginPath();
         Game.ctx.moveTo(0, y);
         Game.ctx.lineTo(w, y);
-        Game.ctx.stroke();
     }
+    Game.ctx.stroke();
 
     // Initialize particles if needed
     if (!Game.bgInitialized) initBackground();
@@ -2597,6 +2739,7 @@ function drawBallTrail() {
 
 // Particle system
 function createParticles(x, y, color, count = 15) {
+    if (Game.particles.length >= 200) return;
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * 3 + 1;
@@ -2641,9 +2784,10 @@ function drawParticles() {
 const SFX = {
     ctx: null,
     enabled: true,
-    volume: 0.15, // Subtle volume
+    volume: 0.15,
 
     init() {
+        if (this.ctx && this.ctx.state !== 'closed') return;
         try {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         } catch (e) {
@@ -2652,120 +2796,99 @@ const SFX = {
     },
 
     play(type) {
-        if (!this.enabled || !this.ctx) return;
-        // Resume context if suspended (browser autoplay policy)
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-
-        const now = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-
-        switch (type) {
-            case 'hit':
-                // Short soft tick
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
-                gain.gain.setValueAtTime(this.volume, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-                osc.start(now);
-                osc.stop(now + 0.1);
-                break;
-
-            case 'score':
-                // Rising tone
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, now);
-                osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
-                gain.gain.setValueAtTime(this.volume * 0.8, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                osc.start(now);
-                osc.stop(now + 0.2);
-                break;
-
-            case 'scoreLost':
-                // Falling tone
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(500, now);
-                osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
-                gain.gain.setValueAtTime(this.volume * 0.7, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                osc.start(now);
-                osc.stop(now + 0.25);
-                break;
-
-            case 'countdown':
-                // Short metallic tick for race countdown
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(800, now);
-                osc.frequency.exponentialRampToValueAtTime(400, now + 0.06);
-                gain.gain.setValueAtTime(this.volume * 0.6, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-                osc.start(now);
-                osc.stop(now + 0.1);
-                break;
-
-            case 'go':
-                // Bright ascending chord burst
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(523, now);
-                osc.frequency.setValueAtTime(784, now + 0.04);
-                osc.frequency.setValueAtTime(1047, now + 0.08);
-                gain.gain.setValueAtTime(this.volume * 1.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-                osc.start(now);
-                osc.stop(now + 0.35);
-                break;
-
-            case 'wall':
-                // Very soft tap
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(200, now);
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.04);
-                gain.gain.setValueAtTime(this.volume * 0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                osc.start(now);
-                osc.stop(now + 0.05);
-                break;
-
-            case 'win':
-                // Victory fanfare
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(523, now);
-                osc.frequency.setValueAtTime(659, now + 0.12);
-                osc.frequency.setValueAtTime(784, now + 0.24);
-                osc.frequency.setValueAtTime(1047, now + 0.36);
-                gain.gain.setValueAtTime(this.volume, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-                osc.start(now);
-                osc.stop(now + 0.5);
-                break;
-
-            case 'lose':
-                // Descending sad tone
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, now);
-                osc.frequency.exponentialRampToValueAtTime(150, now + 0.4);
-                gain.gain.setValueAtTime(this.volume * 0.6, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-                osc.start(now);
-                osc.stop(now + 0.45);
-                break;
-
-            case 'multiBall':
-                // Alert ping
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, now);
-                osc.frequency.setValueAtTime(660, now + 0.05);
-                osc.frequency.setValueAtTime(880, now + 0.1);
-                gain.gain.setValueAtTime(this.volume * 0.6, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-                osc.start(now);
-                osc.stop(now + 0.15);
-                break;
+        if (!this.enabled || !this.ctx || this.ctx.state === 'closed') return;
+        const vol = this.volume;
+        const ctx = this.ctx;
+        const _schedule = () => {
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            switch (type) {
+                case 'hit':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+                    gain.gain.setValueAtTime(vol, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                    break;
+                case 'score':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                    gain.gain.setValueAtTime(vol * 0.8, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                    osc.start(now); osc.stop(now + 0.2);
+                    break;
+                case 'scoreLost':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
+                    gain.gain.setValueAtTime(vol * 0.7, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now); osc.stop(now + 0.25);
+                    break;
+                case 'countdown':
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.06);
+                    gain.gain.setValueAtTime(vol * 0.6, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                    osc.start(now); osc.stop(now + 0.1);
+                    break;
+                case 'go':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523, now);
+                    osc.frequency.setValueAtTime(784, now + 0.04);
+                    osc.frequency.setValueAtTime(1047, now + 0.08);
+                    gain.gain.setValueAtTime(vol * 1.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                    osc.start(now); osc.stop(now + 0.35);
+                    break;
+                case 'wall':
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.04);
+                    gain.gain.setValueAtTime(vol * 0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    osc.start(now); osc.stop(now + 0.05);
+                    break;
+                case 'win':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523, now);
+                    osc.frequency.setValueAtTime(659, now + 0.12);
+                    osc.frequency.setValueAtTime(784, now + 0.24);
+                    osc.frequency.setValueAtTime(1047, now + 0.36);
+                    gain.gain.setValueAtTime(vol, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    osc.start(now); osc.stop(now + 0.5);
+                    break;
+                case 'lose':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(150, now + 0.4);
+                    gain.gain.setValueAtTime(vol * 0.6, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                    osc.start(now); osc.stop(now + 0.45);
+                    break;
+                case 'multiBall':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, now);
+                    osc.frequency.setValueAtTime(660, now + 0.05);
+                    osc.frequency.setValueAtTime(880, now + 0.1);
+                    gain.gain.setValueAtTime(vol * 0.6, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    osc.start(now); osc.stop(now + 0.15);
+                    break;
+            }
+        };
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(_schedule);
+            return;
         }
+        _schedule();
     }
 };
 
@@ -2773,11 +2896,11 @@ const SFX = {
 
 let _gameplayStarted = false;
 let _raceOverlayTimer = null;
+let _gameLoopStarted = false;
 
 // Show 5-second NFS-style race countdown overlay
 // Uses server-provided startAtEpochMs + serverTime for clock-skew-corrected sync
 function showRaceCountdown(startAtEpochMs, durationMs, serverTime) {
-    console.log('[GAME] showRaceCountdown');
 
     resetBallAndPaddles(); // ensure paddles are visible from the first rendered frame (fixes round-1 missing paddle)
 
@@ -2801,16 +2924,10 @@ function showRaceCountdown(startAtEpochMs, durationMs, serverTime) {
     document.getElementById('player2Score').textContent = '0';
     document.getElementById('currentRound').textContent = '1';
     _loopTickCount = 0; // reset so first-tick logs appear
+    _gameLoopStarted = true;
     gameLoop(); // start rendering background
 
-    // Live multiplayer already had the 10s VS slam — skip the 5s overlay
-    if (!Game.isAIGame) {
-        _gameplayStarted = false;
-        document.getElementById('gameStatus').textContent = 'Get ready...';
-        return; // server's gameplayStart event will call startGameplay()
-    }
-
-    // Show overlay (AI/practice games only)
+    // Show countdown overlay for both MP and AI (server-synchronized clock for MP)
     overlay.classList.add('active');
     labelEl.textContent = 'GET READY';
     _gameplayStarted = false;
@@ -2843,9 +2960,8 @@ function showRaceCountdown(startAtEpochMs, durationMs, serverTime) {
             setTimeout(() => {
                 overlay.classList.remove('active');
                 numEl.className = 'race-number';
-                // Start gameplay
                 startGameplay();
-            }, 600);
+            }, 150);
             return;
         }
 
@@ -2881,30 +2997,43 @@ function showRaceCountdown(startAtEpochMs, durationMs, serverTime) {
 
 // Start actual gameplay — idempotent
 function startGameplay() {
-    if (_gameplayStarted) {
-        console.log('[GAME] startGameplay — already started, skipping');
-        return;
-    }
+    if (_gameplayStarted) return;
     _gameplayStarted = true;
-    console.log('[GAME] startGameplay — enabling input + round');
 
-    // Hide race overlay if still visible
+    // Cancel any stale startGame() countdown that may still be running
+    if (Game._startCountdownInterval) { clearInterval(Game._startCountdownInterval); Game._startCountdownInterval = null; }
+
+    // Dismiss any countdown overlay
+    if (_raceOverlayTimer) { clearInterval(_raceOverlayTimer); _raceOverlayTimer = null; }
     const overlay = document.getElementById('raceOverlay');
     if (overlay) overlay.classList.remove('active');
 
-    // Clear any lingering timer
-    if (_raceOverlayTimer) { clearInterval(_raceOverlayTimer); _raceOverlayTimer = null; }
-
-    // Enable gameplay
+    // Enable gameplay + start rendering if not already running (MP skips showRaceCountdown)
     Game.isActive = true;
+    if (!_gameLoopStarted) {
+        _gameLoopStarted = true;
+        resetBallAndPaddles();
+        _loopTickCount = 0;
+        gameLoop();
+    }
+
     // MP: roundActive is set by onRoundStart after server sends roundStart
     // AI: set it here immediately
     if (Game.isAIGame) Game.roundActive = true;
     startGameTimer();
     startRound();
-    document.getElementById('gameStatus').textContent = Game.isAIGame ? 'Game started!' : 'Syncing...';
+    document.getElementById('gameStatus').textContent = Game.isAIGame ? 'Game started!' : 'ROUND 1';
     hapticFeedback('medium');
 }
+
+// Start rendering without starting gameplay — prevents blank canvas while waiting for raceCountdown
+function startRenderLoop() {
+    if (_gameLoopStarted) return;
+    _gameLoopStarted = true;
+    Game.isActive = true;
+    gameLoop();
+}
+window.startRenderLoop = startRenderLoop;
 
 // Report detected score to server (multiplayer only — server is authoritative)
 function reportScoreToServer(scoredBy) {
@@ -2924,6 +3053,8 @@ function reportScoreToServer(scoredBy) {
 // Server broadcasts round result — freeze game and update scores
 function onRoundCooldown(data) {
     const wasActive = Game.roundActive;
+    Game.ball.trail = [];
+    Game._predBall = null; // reset prediction so stale state doesn't bleed into next round
     if (wasActive) {
         // Non-detecting client: freeze ball, play SFX
         Game.roundActive = false;
@@ -2963,18 +3094,102 @@ function onRoundCooldown(data) {
         setTimeout(() => scoredEl.classList.remove('scored'), 400);
     }
 
-    // Show result text
+    // Show result text with countdown to next round
     const resultText = data.roundWinner === 'tie' ? 'Time up - Tie!' :
                        iScored2 ? 'You scored!' : 'Opponent scored!';
-    document.getElementById('gameStatus').textContent = resultText;
+    const cooldownSec = Math.round((data.cooldownMs || 5000) / 1000);
+    let _cdRemaining = cooldownSec;
+    const _statusEl = document.getElementById('gameStatus');
+    _statusEl.textContent = resultText + ' · Next round in ' + _cdRemaining + 's';
+    if (Game._roundCooldownDisplay) clearInterval(Game._roundCooldownDisplay);
+    Game._roundCooldownDisplay = setInterval(() => {
+        _cdRemaining--;
+        if (_cdRemaining > 0) {
+            _statusEl.textContent = resultText + ' · Next round in ' + _cdRemaining + 's';
+        } else {
+            clearInterval(Game._roundCooldownDisplay);
+            Game._roundCooldownDisplay = null;
+        }
+    }, 1000);
 }
 
-// Server signals next round — show countdown then start
+// Server signals next round — show 5-second countdown then signal ready
 function onRoundResume(data) {
+    if (Game._roundCooldownDisplay) { clearInterval(Game._roundCooldownDisplay); Game._roundCooldownDisplay = null; }
+    if (Game._roundResumeCountdown) { clearInterval(Game._roundResumeCountdown); Game._roundResumeCountdown = null; }
+    Game._pendingRoundStart = null;
+    Game._awaitingCountdownEnd = false;
+
     Game.currentRound = data.currentRound;
     document.getElementById('currentRound').textContent = data.currentRound;
-    document.getElementById('gameStatus').textContent = 'Round ' + data.currentRound + ' of 3';
-    showRoundCountdown(); // shows 3-2-1-GO then calls startRound()
+
+    // Signal server immediately — roundReady goes out now, not after the countdown.
+    // This means both clients sync during the countdown, so roundStart arrives BEFORE
+    // the countdown ends → no freeze when GO! fires.
+    startRound();
+
+    const overlay = document.getElementById('raceOverlay');
+    const numEl   = document.getElementById('raceNumber');
+    const labelEl = document.getElementById('raceLabel');
+    if (!overlay || !numEl) return; // startRound() already signaled; just wait for onRoundStart
+
+    overlay.classList.add('active');
+    if (labelEl) labelEl.textContent = 'ROUND ' + data.currentRound;
+
+    let countdown = 5;
+    numEl.textContent = countdown;
+    numEl.className = 'race-number';
+    numEl.style.animation = 'none';
+    numEl.offsetHeight;
+    numEl.style.animation = '';
+
+    document.getElementById('gameStatus').textContent = 'ROUND ' + data.currentRound;
+
+    Game._roundResumeCountdown = setInterval(() => {
+        countdown--;
+
+        if (countdown > 0) {
+            numEl.textContent = countdown;
+            numEl.className = countdown <= 2 ? 'race-number warning' : 'race-number';
+            numEl.style.animation = 'none';
+            numEl.offsetHeight;
+            numEl.style.animation = '';
+            hapticFeedback('light');
+            SFX.play('countdown');
+        } else if (countdown === 0) {
+            numEl.textContent = 'GO!';
+            numEl.className = 'race-number go';
+            numEl.style.animation = 'none';
+            numEl.offsetHeight;
+            numEl.style.animation = '';
+            hapticFeedback('medium');
+            SFX.play('go');
+        } else {
+            clearInterval(Game._roundResumeCountdown);
+            Game._roundResumeCountdown = null;
+            setTimeout(() => {
+                overlay.classList.remove('active');
+                numEl.className = 'race-number';
+                // roundStart should have already arrived during the countdown
+                if (Game._pendingRoundStart) {
+                    // _pendingRoundStart.ball is the T=0 state from when roundStart first arrived
+                    // (~5 seconds ago). applyServerGameState has been keeping localBall current,
+                    // so overwrite the stale ball data with the live state before applying.
+                    if (Game.localBall) {
+                        Game._pendingRoundStart.ball = {
+                            x: Game.localBall.x, y: Game.localBall.y,
+                            speedX: Game.localBall.speedX, speedY: Game.localBall.speedY
+                        };
+                    }
+                    _applyRoundStart(Game._pendingRoundStart);
+                    Game._pendingRoundStart = null;
+                } else {
+                    // roundStart hasn't arrived yet (very slow network); activate when it does
+                    Game._awaitingCountdownEnd = true;
+                }
+            }, 150);
+        }
+    }, 1000);
 }
 
 // Server signals game over — show result screen with authoritative data
@@ -2984,6 +3199,12 @@ function onGameOver(data) {
     if (Game.gameTimerInterval) { clearInterval(Game.gameTimerInterval); Game.gameTimerInterval = null; }
     if (Game.roundTimerInterval) { clearInterval(Game.roundTimerInterval); Game.roundTimerInterval = null; }
     if (_raceOverlayTimer) { clearInterval(_raceOverlayTimer); _raceOverlayTimer = null; }
+    if (Game._roundResumeCountdown) { clearInterval(Game._roundResumeCountdown); Game._roundResumeCountdown = null; }
+    if (Game._roundCooldownDisplay) { clearInterval(Game._roundCooldownDisplay); Game._roundCooldownDisplay = null; }
+    Game._pendingRoundStart = null;
+    Game._awaitingCountdownEnd = false;
+    const _goOverlay = document.getElementById('raceOverlay');
+    if (_goOverlay) _goOverlay.classList.remove('active');
 
     hapticFeedback('heavy');
 
@@ -3114,65 +3335,121 @@ function onGameOver(data) {
     setTimeout(() => { showScreen('resultScreen'); }, 1000);
 }
 
-// Apply server-authoritative game state to local render state
-// Ball is stored as an extrapolation origin; opponent paddle is lerped each frame
+// Apply server-authoritative game state — pushes to interpolation buffer
 function applyServerGameState(data) {
     if (!Game.isActive || Game.isAIGame) return;
 
     const sx = Game.canvas.width  / SERVER_WORLD_W;
     const sy = Game.canvas.height / SERVER_WORLD_H;
 
-    if (data.ball) {
-        const svX = data.ball.x * sx;
-        const svY = data.ball.y * sy;
-        // Snap if too far off (reconnect / large correction)
-        const dx = svX - Game.ball.x, dy = svY - Game.ball.y;
-        if (dx * dx + dy * dy > 50 * 50) {
-            Game.ball.x = svX;
-            Game.ball.y = svY;
-        }
-        // Store as extrapolation origin
-        Game.ball._svX    = svX;
-        Game.ball._svY    = svY;
-        Game.ball._svT    = performance.now();
-        Game.ball._ramp   = data.ramp !== undefined ? data.ramp : 1.0;
-        Game.ball.speedX  = data.ball.speedX * sx;
-        Game.ball.speedY  = data.ball.speedY * sy;
-        Game.ball.trail.push({ x: Game.ball.x, y: Game.ball.y });
-        if (Game.ball.trail.length > 8) Game.ball.trail.shift();
+    // Opponent paddle: apply directly (server-authoritative, no buffering needed)
+    if (Game.isPlayer1) {
+        Game.paddle1.width = SERVER_PADDLE_W * sx;
+        if (data.paddle2X !== undefined) { Game.paddle2.width = SERVER_PADDLE_W * sx; Game.paddle2.x = data.paddle2X * sx; }
+    } else {
+        Game.paddle2.width = SERVER_PADDLE_W * sx;
+        if (data.paddle1X !== undefined) { Game.paddle1.width = SERVER_PADDLE_W * sx; Game.paddle1.x = data.paddle1X * sx; }
     }
 
-    // Own paddle: updated locally for zero-latency feel
-    // Opponent paddle: store target, lerp each frame
-    if (Game.isPlayer1) {
-        if (data.paddle2X !== undefined) {
-            Game.paddle2._targetX = data.paddle2X * sx;
-            Game.paddle2.width    = SERVER_PADDLE_W * sx;
+    // Ball: correct the local dead-reckoning simulation
+    if (data.ball && typeof data.ball.x === 'number' && !isNaN(data.ball.x) &&
+        typeof data.ball.y === 'number' && !isNaN(data.ball.y) &&
+        typeof data.ball.speedX === 'number' && !isNaN(data.ball.speedX) &&
+        typeof data.ball.speedY === 'number' && !isNaN(data.ball.speedY)) {
+        if (!Game.localBall) {
+            // Initialise if roundStart hasn't fired yet (e.g. resync)
+            Game.localBall = {
+                x: data.ball.x, y: data.ball.y,
+                speedX: data.ball.speedX, speedY: data.ball.speedY,
+                ramp: data.ramp !== undefined ? data.ramp : 1.0,
+                _lastT: performance.now()
+            };
+        } else {
+            const lb = Game.localBall;
+            // Grace period: if we just locally bounced the ball, don't let the server snap
+            // velocity back to the pre-bounce direction while the correction is still in-flight.
+            // Scale to measured ping: low ping → server agrees almost instantly; high ping →
+            // pre-bounce packets keep arriving longer, so hold the local bounce longer.
+            const _gracePeriod = Math.max(120, Math.min(350, (window._pingMs || 120) + 80));
+            const _inGrace = lb._localBounceAt && (performance.now() - lb._localBounceAt < _gracePeriod);
+            const _serverDisagrees = _inGrace && (
+                (Game.isPlayer1 && data.ball.speedY > 0 && lb.speedY < 0) ||
+                (!Game.isPlayer1 && data.ball.speedY < 0 && lb.speedY > 0)
+            );
+
+            if (!_serverDisagrees) {
+                lb.speedX = data.ball.speedX;
+                lb.speedY = data.ball.speedY;
+                if (_inGrace) lb._localBounceAt = null; // server agreed — grace done
+            }
+            if (data.ramp !== undefined) lb.ramp = data.ramp;
+
+            // If server ball is near a scoring boundary, snap immediately and suppress
+            // client-side prediction. Slow lerp here causes the dead-reckoning ball to
+            // linger near the paddle while the server has already scored — triggering
+            // a false hit report after the round is over.
+            const _nearTop    = data.ball.y - 8 < 80;   // within 80wu of P2 scoring zone
+            const _nearBottom = data.ball.y + 8 > 520;  // within 80wu of P1 scoring zone
+            // Don't snap the ball back toward the boundary while we're holding a legit local
+            // bounce (server correction still in flight) — that causes a visible down-then-up jump.
+            if ((_nearTop || _nearBottom) && !_serverDisagrees) {
+                lb.x = data.ball.x;
+                lb.y = data.ball.y;
+                lb._localBounceAt = null;
+                lb._skipPrediction = true;
+            } else {
+                lb._skipPrediction = false;
+
+                // Position correction: scale with error so small drifts lerp, big jumps snap
+                const dx = data.ball.x - lb.x;
+                const dy = data.ball.y - lb.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 60) {
+                    lb.x = data.ball.x;
+                    lb.y = data.ball.y;
+                    lb._localBounceAt = null;
+                } else if (dist > 1 && !_serverDisagrees) {
+                    const f = Math.min(0.4, dist * 0.04);
+                    lb.x += dx * f;
+                    lb.y += dy * f;
+                }
+            }
         }
-        Game.paddle1.width = SERVER_PADDLE_W * sx;
-    } else {
-        if (data.paddle1X !== undefined) {
-            Game.paddle1._targetX = data.paddle1X * sx;
-            Game.paddle1.width    = SERVER_PADDLE_W * sx;
-        }
-        Game.paddle2.width = SERVER_PADDLE_W * sx;
     }
 }
 
 // Called when server sends 'roundStart' — both clients have signaled ready
-function onRoundStart(data) {
-    console.log('[ROUND] onRoundStart round=' + data.currentRound);
+function _applyRoundStart(data) {
+    const overlay = document.getElementById('raceOverlay');
+    if (overlay) overlay.classList.remove('active');
+
     Game.currentRound = data.currentRound;
     document.getElementById('currentRound').textContent = data.currentRound;
     document.getElementById('gameStatus').textContent = 'Round ' + data.currentRound + ' of 3';
 
-    // Apply initial ball and paddle positions from server
-    applyServerGameState({ ball: data.ball, paddle1X: data.paddle1X, paddle2X: data.paddle2X });
+    const _sx = Game.canvas.width  / SERVER_WORLD_W;
+    const _sy = Game.canvas.height / SERVER_WORLD_H;
+    if (data.ball && typeof data.ball.x === 'number' && !isNaN(data.ball.x)) {
+        Game.localBall = {
+            x: data.ball.x, y: data.ball.y,
+            speedX: data.ball.speedX, speedY: data.ball.speedY,
+            ramp: 0.3,
+            _lastT: performance.now()
+        };
+    } else {
+        // Fallback: seed ball at world center so it's never invisible
+        Game.localBall = {
+            x: 200, y: 300, speedX: 4, speedY: 6, ramp: 0.3,
+            _lastT: performance.now()
+        };
+    }
+    if (data.paddle1X !== undefined) { Game.paddle1.x = data.paddle1X * _sx; Game.paddle1.width = SERVER_PADDLE_W * _sx; }
+    if (data.paddle2X !== undefined) { Game.paddle2.x = data.paddle2X * _sx; Game.paddle2.width = SERVER_PADDLE_W * _sx; }
+    Game.stateBuffer = [];
 
     Game.roundActive = true;
     Game.roundTimeRemaining = 40;
 
-    // Display-only timer (server owns the authoritative 40s; client just shows countdown)
     if (Game.roundTimerInterval) clearInterval(Game.roundTimerInterval);
     Game.roundTimerInterval = setInterval(() => {
         if (!Game.roundActive) return;
@@ -3183,7 +3460,56 @@ function onRoundStart(data) {
         }
     }, 1000);
 
+    SFX.play('go');
     hapticFeedback('medium');
+}
+
+function onRoundStart(data) {
+    // If the between-round countdown is still ticking, defer activation until it ends.
+    // roundReady was already sent in onRoundResume, so this fires quickly — but we can't
+    // activate gameplay while GO! is still on screen.
+    if (Game._roundResumeCountdown) {
+        Game._pendingRoundStart = data;
+        // Seed localBall now so dead-reckoning is accurate during the remaining countdown
+        const _sx = Game.canvas.width  / SERVER_WORLD_W;
+        const _sy = Game.canvas.height / SERVER_WORLD_H;
+        if (data.ball) {
+            Game.localBall = {
+                x: data.ball.x, y: data.ball.y,
+                speedX: data.ball.speedX, speedY: data.ball.speedY,
+                ramp: 0.3,
+                _lastT: performance.now()
+            };
+        }
+        if (data.paddle1X !== undefined) { Game.paddle1.x = data.paddle1X * _sx; Game.paddle1.width = SERVER_PADDLE_W * _sx; }
+        if (data.paddle2X !== undefined) { Game.paddle2.x = data.paddle2X * _sx; Game.paddle2.width = SERVER_PADDLE_W * _sx; }
+        Game.stateBuffer = [];
+        return;
+    }
+
+    // Countdown already finished (or this is round 1 with no between-round countdown)
+    Game._awaitingCountdownEnd = false;
+    _applyRoundStart(data);
+}
+
+// Send a binary hit report (type=4) to the server when client predicts a paddle bounce.
+// Server validates and applies the bounce server-side to close the RTT/2 timing gap.
+function _sendHitReport(bx, by, bsx, bsy) {
+    if (typeof sendBinaryRaw !== 'function') return;
+    // Include current paddle world-X so server can use it even if paddle-move
+    // messages were delayed or dropped (common on mobile Telegram WebSocket).
+    const _sx = Game.canvas.width / SERVER_WORLD_W;
+    const paddle = Game.isPlayer1 ? Game.paddle1 : Game.paddle2;
+    const paddleWorldX = Math.max(0, Math.min(SERVER_WORLD_W - SERVER_PADDLE_W, paddle.x / _sx));
+    const buf = new ArrayBuffer(21);
+    const dv = new DataView(buf);
+    dv.setUint8(0, 4);
+    dv.setFloat32(1,  bx,          true);
+    dv.setFloat32(5,  by,          true);
+    dv.setFloat32(9,  bsx,         true);
+    dv.setFloat32(13, bsy,         true);
+    dv.setFloat32(17, paddleWorldX, true);
+    sendBinaryRaw(buf);
 }
 
 // Export game functions

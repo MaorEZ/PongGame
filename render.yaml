@@ -1,0 +1,17 @@
+# Render.com Blueprint — deploys GoAgainstMe as a free web service.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: goagainstme
+    runtime: node
+    plan: free                      # free tier: sleeps after ~15 min idle, wakes on request
+    buildCommand: npm install --legacy-peer-deps   # @ton/ton vs @ton/core peer-dep conflict
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    autoDeploy: true                # redeploy on every push to the connected branch
+    envVars:
+      # Render injects PORT automatically; server.js already reads process.env.PORT.
+      - key: BOT_TOKEN              # optional for browser QA; needed for Telegram initData verification
+        sync: false
+      # SUPABASE_URL / SUPABASE_SERVICE_KEY have working fallbacks in server.js.
+      # Leaving TON_MNEMONIC unset keeps wagering/withdrawals disabled (safe for QA).

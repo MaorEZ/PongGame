@@ -7,10 +7,26 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { createClient: createSupabase } = require('@supabase/supabase-js');
+const { TonClient, WalletContractV4, internal, toNano, beginCell, Address } = require('@ton/ton');
+const { mnemonicToPrivateKey } = require('@ton/crypto');
+
+// Load .env file (mnemonic, API keys)
+const _envPath = path.join(__dirname, '.env');
+if (fs.existsSync(_envPath)) {
+    fs.readFileSync(_envPath, 'utf8').split('\n').forEach(line => {
+        const eq = line.indexOf('=');
+        if (eq > 0 && !line.startsWith('#')) {
+            const k = line.slice(0, eq).trim();
+            const v = line.slice(eq + 1).trim();
+            if (k && !process.env[k]) process.env[k] = v;
+        }
+    });
+}
 
 const db = createSupabase(
-    'https://qfzbhjnksngtlihuovcm.supabase.co',
-    'sb_publishable_wXqf6IXKxjlMknuLEFKT8w_r2KfM8tr'
+    process.env.SUPABASE_URL || 'https://qfzbhjnksngtlihuovcm.supabase.co',
+    process.env.SUPABASE_SERVICE_KEY || 'sb_publishable_wXqf6IXKxjlMknuLEFKT8w_r2KfM8tr',
+    { realtime: { webSocketImpl: require('ws') } }
 );
 
 // Load a user's persisted stats from Supabase
@@ -34,19 +50,198 @@ function persistUserStats(userId, user) {
         earnings: user.earnings || 0,
         matches_played: user.matchesPlayed || 0,
         total_wagered: user.totalWagered || 0,
+        name_changes_remaining: user.nameChangesRemaining ?? 3,
         updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' }).then(({ error }) => {
         if (error) console.error('[DB] Persist error:', error.message);
     });
 }
 
+// Log a deposit or withdrawal transaction
+function logTransaction(userId, type, amount, txHash, matchId) {
+    db.from('transactions').insert({
+        user_id: String(userId),
+        type,
+        amount,
+        tx_hash: txHash || null,
+        match_id: matchId || null,
+        created_at: new Date().toISOString()
+    }).then(({ error }) => {
+        if (error) console.error('[DB] Transaction log error:', error.message);
+    });
+}
+
+// Accumulate platform fee in DB and in-memory counter
+const OWNER_WALLET       = process.env.OWNER_WALLET || 'UQDzfMkS16zyHDnJwSX_Fa0C6xvY0SodUBaZo_WY726v61JU';
+const AUTO_SWEEP_THRESHOLD = parseFloat(process.env.AUTO_SWEEP_THRESHOLD || '100');
+
+let _platformFeesAccumulated = 0;
+let _sweepInProgress = false;
+
+function accumulatePlatformFee(amount) {
+    if (!amount || amount <= 0) return;
+    _platformFeesAccumulated += amount;
+    db.from('platform_fees').upsert({
+        id: 1,
+        accumulated: _platformFeesAccumulated,
+        lifetime_total: _platformFeesAccumulated,
+        updated_at: new Date().toISOString()
+    }, { onConflict: 'id' }).then(({ error }) => {
+        if (error) console.error('[DB] Fee accumulate error:', error.message);
+    });
+    console.log(`[FEES] +$${amount.toFixed(4)} | Total accumulated: $${_platformFeesAccumulated.toFixed(4)}`);
+    if (_platformFeesAccumulated >= AUTO_SWEEP_THRESHOLD && !_sweepInProgress) {
+        executeSweep(OWNER_WALLET);
+    }
+}
+
+async function executeSweep(toAddr) {
+    if (_sweepInProgress || _platformFeesAccumulated < 0.01) return;
+    _sweepInProgress = true;
+    const sweepAmount = _platformFeesAccumulated;
+    _platformFeesAccumulated = 0;
+    console.log(`[FEES] Auto-sweeping $${sweepAmount.toFixed(4)} → ${toAddr}`);
+    try {
+        await sendUSDTTransfer(toAddr, sweepAmount);
+        db.from('platform_fees').upsert({ id: 1, accumulated: 0, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+        logTransaction('PLATFORM', 'fee_sweep', sweepAmount, null, null);
+        console.log(`[FEES] Sweep complete: $${sweepAmount.toFixed(4)} → ${toAddr}`);
+    } catch (e) {
+        _platformFeesAccumulated += sweepAmount; // restore on failure
+        console.error('[FEES] Sweep failed:', e.message);
+    } finally {
+        _sweepInProgress = false;
+    }
+}
+
+// Load accumulated platform fees on startup
+async function loadPlatformFees() {
+    try {
+        const { data } = await db.from('platform_fees').select('accumulated').eq('id', 1).single();
+        if (data) { _platformFeesAccumulated = parseFloat(data.accumulated) || 0; }
+        console.log(`[FEES] Loaded accumulated: $${_platformFeesAccumulated.toFixed(4)}`);
+    } catch { /* first boot */ }
+}
+
+// ── TON Payment Config ────────────────────────────────────────────────────────
+const TONAPI_KEY   = process.env.TONAPI_KEY  || '';
+const TON_MNEMONIC = (process.env.TON_MNEMONIC || '').split(' ').filter(Boolean);
+const GAME_WALLET  = process.env.TON_WALLET  || 'UQAsF-kKU4tzrIf4DcTMzCSNv0zJ-Vq38dlEMc7PwAv2b77d';
+const USDT_MASTER  = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
+const MIN_DEPOSIT  = 2;   // USDT
+const MIN_WITHDRAW = 2;   // USDT
+const WITHDRAW_ANTI_WAGER = 10; // must have wagered $10 before withdrawing
+
+let tonClient = null, gameWalletContract = null, gameWalletKeyPair = null;
+const processedDepositHashes = new Set(); // prevent double-crediting
+
+async function initTONWallet() {
+    try {
+        if (!TON_MNEMONIC.length) { console.error('[TON] No mnemonic in .env'); return; }
+        tonClient = new TonClient({ endpoint: 'https://toncenter.com/api/v2/jsonRPC' });
+        gameWalletKeyPair = await mnemonicToPrivateKey(TON_MNEMONIC);
+        gameWalletContract = tonClient.open(
+            WalletContractV4.create({ publicKey: gameWalletKeyPair.publicKey, workchain: 0 })
+        );
+        console.log('[TON] Hot wallet ready:', GAME_WALLET);
+    } catch (e) { console.error('[TON] Wallet init failed:', e.message); }
+}
+
+async function getJettonWalletAddr(ownerAddress) {
+    const res = await tonClient.runMethod(
+        Address.parse(USDT_MASTER), 'get_wallet_address',
+        [{ type: 'slice', cell: beginCell().storeAddress(Address.parse(ownerAddress)).endCell() }]
+    );
+    return res.stack.readAddress();
+}
+
+async function sendUSDTTransfer(toAddress, amountUSDT) {
+    if (!gameWalletContract) throw new Error('TON wallet not initialized');
+    const jettonWallet = await getJettonWalletAddr(GAME_WALLET);
+    const amountNano = BigInt(Math.round(amountUSDT * 1e6));
+    const body = beginCell()
+        .storeUint(0xf8a7ea5, 32)
+        .storeUint(0, 64)
+        .storeCoins(amountNano)
+        .storeAddress(Address.parse(toAddress))
+        .storeAddress(Address.parse(GAME_WALLET))
+        .storeBit(0)
+        .storeCoins(1n)
+        .storeBit(0)
+        .endCell();
+    const seqno = await gameWalletContract.getSeqno();
+    await gameWalletContract.sendTransfer({
+        seqno,
+        secretKey: gameWalletKeyPair.secretKey,
+        messages: [internal({ to: jettonWallet, value: toNano('0.1'), body })]
+    });
+}
+
+async function processUSDTDeposit(txHash, amountRaw, memo) {
+    if (!txHash || processedDepositHashes.has(txHash)) return;
+    const amountUSDT = Number(amountRaw) / 1e6;
+    if (amountUSDT < MIN_DEPOSIT) { console.log(`[TON] Deposit too small: $${amountUSDT}`); return; }
+    const userId = String(memo || '').trim();
+    const user = Database.users.get(userId);
+    if (!user) { console.log(`[TON] No user for memo "${userId}", tx=${txHash}`); return; }
+    processedDepositHashes.add(txHash);
+    user.balance = (user.balance || 0) + amountUSDT;
+    persistUserStats(userId, user);
+    logTransaction(userId, 'deposit', amountUSDT, txHash, null);
+    const ws = getSocketByUserId(userId);
+    if (ws) {
+        safeSend(ws, { type: 'balance', balance: user.balance });
+        safeSend(ws, { type: 'depositConfirmed', amount: amountUSDT, balance: user.balance });
+    }
+    console.log(`[TON] Deposit credited: $${amountUSDT} → user ${userId} (${user.name}), new balance $${user.balance.toFixed(2)}`);
+}
+
+function handleTONWebhook(event) {
+    const actions = event.actions || [];
+    for (const action of actions) {
+        if (action.type !== 'JettonTransfer' || action.status !== 'ok') continue;
+        const t = action.JettonTransfer || action.jetton_transfer;
+        if (!t) continue;
+        const sym = t.jetton?.symbol || '';
+        if (sym !== 'USD₮' && sym !== 'USDT' && !(t.jetton?.name || '').includes('Tether')) continue;
+        const txHash = event.event_id || String(Date.now());
+        processUSDTDeposit(txHash, t.amount || '0', t.comment || '');
+    }
+}
+
+// Poll tonapi.io every 15s for new USDT deposits to the game wallet
+let _lastEventLt = '0'; // logical time of last seen event (paginates newer ones)
+
+async function pollTONDeposits() {
+    if (!TONAPI_KEY) return;
+    try {
+        const url = `https://tonapi.io/v2/accounts/${encodeURIComponent(GAME_WALLET)}/events?limit=20&subject_only=true`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TONAPI_KEY}` } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const events = (data.events || []).reverse(); // oldest first
+        for (const event of events) {
+            if (event.lt <= _lastEventLt) continue;
+            _lastEventLt = event.lt;
+            handleTONWebhook(event);
+        }
+    } catch (e) { /* silent — network hiccup */ }
+}
+
+function startTONPoller() {
+    if (!TONAPI_KEY) { console.log('[TON] No TONAPI_KEY — deposit polling disabled'); return; }
+    pollTONDeposits(); // run immediately on startup
+    setInterval(pollTONDeposits, 15000); // then every 15 seconds
+    console.log('[TON] Deposit poller started (15s interval)');
+}
+
 // ── Security Config ───────────────────────────────────────────────────────────
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Your Telegram user ID(s) — only these can use admin commands
 // Find your ID by messaging @userinfobot on Telegram
 const ADMIN_IDS = new Set([
-    // '123456789',  // ← add your Telegram user ID here (as a string)
+    '8325405950',
 ]);
 
 // Your Telegram bot token — set via environment variable for safety
@@ -122,7 +317,7 @@ function initBallForRound(game) {
 // Uses drift-corrected setTimeout so the event loop can't bunch up missed ticks
 function startPhysicsLoop(game) {
     if (game.physicsTimeout) return;
-    console.log(`[PHYSICS] Starting loop for game ${game.id}`);
+    game.physicsTimeout = true; // sentinel — prevents double-start before first tick
     let expected = Date.now() + TICK_MS;
     function tick() {
         serverTick(game);
@@ -167,18 +362,24 @@ function serverTick(game) {
         ball.speedX = xs * Math.sqrt(Math.max(0, spd * spd - ball.speedY * ball.speedY));
     }
 
-    // Lag-compensated paddle positions — use where the player had their paddle
-    // at (now - RTT/2), i.e. the last input they could have sent given their ping
-    const p1lag = getLagPaddleX(game.paddle1History, game.paddle1.x, (game.player1RTT || 0) / 2);
-    const p2lag = getLagPaddleX(game.paddle2History, game.paddle2.x, (game.player2RTT || 0) / 2);
+    const _p1RTT = Math.min(game.player1RTT || 120, 400);
+    const _p2RTT = Math.min(game.player2RTT || 120, 400);
+    const p1lag = game.paddle1.x;
+    const p2lag = game.paddle2.x;
+    // Horizontal buffer: forgives small position drift from jitter/rounding
+    // Horizontal buffer: widens the hitbox to forgive RTT-induced paddle position lag
+    const P1_LAG_BUFFER = Math.max(16, Math.min(40, Math.round(_p1RTT * 0.28)));
+    const P2_LAG_BUFFER = Math.max(16, Math.min(40, Math.round(_p2RTT * 0.28)));
 
-    // Paddle 1 collision (bottom paddle)
+    // Paddle 1 collision (bottom paddle) — crossP1: ball crossed line this tick
     const pBot = prevY + BALL_R, cBot = ball.y + BALL_R;
     const crossP1 = pBot <= P1_Y && cBot >= P1_Y;
     let p1cx = ball.x;
-    if (crossP1 && cBot !== pBot) p1cx = prevX + effX * ((P1_Y - pBot) / (cBot - pBot));
+    if (crossP1 && cBot !== pBot) {
+        p1cx = prevX + effX * ((P1_Y - pBot) / (cBot - pBot));
+    }
     if ((crossP1 || (cBot > P1_Y && cBot < P1_Y + PADDLE_H)) &&
-        p1cx > p1lag - BALL_R && p1cx < p1lag + PADDLE_W + BALL_R && ball.speedY > 0) {
+        p1cx > p1lag - BALL_R - P1_LAG_BUFFER && p1cx < p1lag + PADDLE_W + BALL_R + P1_LAG_BUFFER && ball.speedY > 0) {
         ball.y = P1_Y - BALL_R;
         const angle = ((p1cx - p1lag) / PADDLE_W - 0.5) * (Math.PI / 3);
         const ns = spd + BASE_SPEED * 0.08;
@@ -192,9 +393,11 @@ function serverTick(game) {
     const pTop = prevY - BALL_R, cTop = ball.y - BALL_R;
     const crossP2 = pTop >= p2Bot && cTop <= p2Bot;
     let p2cx = ball.x;
-    if (crossP2 && cTop !== pTop) p2cx = prevX + effX * ((p2Bot - pTop) / (cTop - pTop));
+    if (crossP2 && cTop !== pTop) {
+        p2cx = prevX + effX * ((p2Bot - pTop) / (cTop - pTop));
+    }
     if ((crossP2 || (cTop < p2Bot && cTop > P2_Y)) &&
-        p2cx > p2lag - BALL_R && p2cx < p2lag + PADDLE_W + BALL_R && ball.speedY < 0) {
+        p2cx > p2lag - BALL_R - P2_LAG_BUFFER && p2cx < p2lag + PADDLE_W + BALL_R + P2_LAG_BUFFER && ball.speedY < 0) {
         ball.y = p2Bot + BALL_R;
         const angle = ((p2cx - p2lag) / PADDLE_W - 0.5) * (Math.PI / 3);
         const ns = spd + BASE_SPEED * 0.08;
@@ -207,28 +410,60 @@ function serverTick(game) {
     const spd2 = Math.sqrt(ball.speedX * ball.speedX + ball.speedY * ball.speedY);
     if (spd2 > MAX_SPEED) { ball.speedX = ball.speedX / spd2 * MAX_SPEED; ball.speedY = ball.speedY / spd2 * MAX_SPEED; }
 
-    // Score detection
-    if (ball.y - BALL_R < 0)          { stopPhysicsLoop(game); handleScoreEvent(game, 'player1'); return; }
-    if (ball.y + BALL_R > WORLD_H)     { stopPhysicsLoop(game); handleScoreEvent(game, 'player2'); return; }
+    // Score detection — arm a 200ms grace window for late hit reports rather than scoring immediately.
+    // At 100ms ping the client's hit report often arrives after this tick fires; the grace lets
+    // handleClientHitReport rescue the bounce instead of silently losing the round.
+    if (ball.y - BALL_R < 0) {
+        console.log(`[MISS] P2 missed: ball=(${ball.x.toFixed(1)},${ball.y.toFixed(1)}) p2.x=${game.paddle2.x.toFixed(1)} P2_RTT=${game.player2RTT||'?'}ms — arming 200ms grace`);
+        armPendingMiss(game, 'player1', prevX, prevY); return;
+    }
+    if (ball.y + BALL_R > WORLD_H) {
+        console.log(`[MISS] P1 missed: ball=(${ball.x.toFixed(1)},${ball.y.toFixed(1)}) p1.x=${game.paddle1.x.toFixed(1)} P1_RTT=${game.player1RTT||'?'}ms — arming 200ms grace`);
+        armPendingMiss(game, 'player2', prevX, prevY); return;
+    }
 
     // Round timer (40s)
     if (game.roundStartTime && now - game.roundStartTime >= 40000) {
         stopPhysicsLoop(game); handleScoreEvent(game, 'tie'); return;
     }
 
-    // Broadcast authoritative state to both clients
-    broadcastToGame(game, {
-        type: 'gameState',
-        ball: { x: ball.x, y: ball.y, speedX: ball.speedX, speedY: ball.speedY },
-        paddle1X: game.paddle1.x, paddle2X: game.paddle2.x, ramp
-    });
+    // Broadcast authoritative state — binary (37 bytes vs ~145 bytes JSON)
+    broadcastBinaryToGame(game, makeBinaryGameState(ball, game.paddle1.x, game.paddle2.x, ramp, now));
+}
+
+// Arm a 200ms grace window before committing a miss.
+// At 100ms RTT the client's hit report often arrives ~50ms after the server already detected a miss;
+// without this window the client sees their hit + bounce locally but server already scored the round.
+function armPendingMiss(game, scoredBy, snapshotX, snapshotY) {
+    if (game.pendingMiss) return;
+    stopPhysicsLoop(game);
+    game.pendingMiss = {
+        scoredBy,
+        ballSnapshot: { x: snapshotX, y: snapshotY, speedX: game.ball.speedX, speedY: game.ball.speedY }
+    };
+    // The player who (maybe) missed is the one whose late hit report we're waiting for.
+    // Scale the window to their RTT so high-latency clients still get rescued, while
+    // low-latency clients commit the miss quickly instead of feeling a ~200ms hang.
+    const misser = scoredBy === 'player1' ? 'player2' : 'player1';
+    const rtt = (misser === 'player1' ? game.player1RTT : game.player2RTT) || 120;
+    const graceMs = Math.max(150, Math.min(400, Math.round(rtt * 0.75 + 90)));
+    game.pendingMissTimer = setTimeout(() => commitPendingMiss(game), graceMs);
+}
+
+function commitPendingMiss(game) {
+    if (!game.pendingMiss) return;
+    const scoredBy = game.pendingMiss.scoredBy;
+    game.pendingMiss = null;
+    game.pendingMissTimer = null;
+    handleScoreEvent(game, scoredBy);
 }
 
 // Server-authoritative score event — called from serverTick, never from client
 function handleScoreEvent(game, scoredBy) {
     if (game.status !== 'active') return;
     game.status = 'roundCooldown';
-    const COOLDOWN_MS = 3000;
+    game.lastScoreTime = Date.now();
+    const COOLDOWN_MS = 5000;
 
     if (scoredBy === 'player1') game.score.player1++;
     else if (scoredBy === 'player2') game.score.player2++;
@@ -256,14 +491,14 @@ function handleScoreEvent(game, scoredBy) {
             game.status = 'roundCooldown';
             game.roundReadyFlags = { player1: false, player2: false };
             broadcastToGame(game, { type: 'roundResume', currentRound: game.currentRound, serverTime: Date.now() });
-            // Safety fallback: start round anyway after 7s if a client doesn't respond
+            // Safety fallback: start round anyway after 4s if a client doesn't respond
             game.roundReadyTimeout = setTimeout(() => {
                 game.roundReadyTimeout = null;
                 if (game.status === 'roundCooldown') {
                     console.log(`[ROUND] Timeout — starting round ${game.currentRound} without full ready`);
                     startNewRound(game);
                 }
-            }, 7000);
+            }, 4000);
         }
     }, COOLDOWN_MS);
 }
@@ -286,7 +521,16 @@ function startNewRound(game) {
     game.status = 'active';
     game.roundReadyFlags = null;
     initBallForRound(game);
-    game.roundStartTime = Date.now();
+
+    // Round 2+ sends roundReady at the START of the client's 5s cosmetic countdown (PM2 199 sync optimization).
+    // Without deferring physics, the ball moves on the server for the entire countdown and is already
+    // mid-trajectory — often past a paddle — the instant GO! clears on the client.
+    // Round 1 paths (initial-after-ring / rematch-after-overlay) complete their cosmetic before sending
+    // roundReady, so no delay is needed for them.
+    const COSMETIC_DELAY = game.currentRound > 1 ? 5000 : 0;
+    const ballStartAt = Date.now() + COSMETIC_DELAY;
+    game.roundStartTime = ballStartAt;
+    game.ball.rampUpStartTime = ballStartAt; // ramp begins when ball actually moves, not when round was scheduled
 
     // Provably fair: on round 1, generate secret + commit to the ball seed
     if (game.currentRound === 1) {
@@ -302,11 +546,24 @@ function startNewRound(game) {
         ball: { x: game.ball.x, y: game.ball.y, speedX: game.ball.speedX, speedY: game.ball.speedY },
         paddle1X: game.paddle1.x, paddle2X: game.paddle2.x,
         serverTime: Date.now(),
+        ballStartAt,
         fairCommitment: game.currentRound === 1 ? game.fairCommitment : undefined
     });
-    startPhysicsLoop(game);
-    startPingLoop(game);
-    console.log(`[ROUND] Round ${game.currentRound} started`);
+
+    const beginPhysics = () => {
+        game.physicsStartTimer = null;
+        if (game.status !== 'active') return; // game ended during the delay
+        startPhysicsLoop(game);
+        startPingLoop(game);
+        console.log(`[ROUND] Round ${game.currentRound} ball physics started — P1_RTT=${game.player1RTT||'?'}ms P2_RTT=${game.player2RTT||'?'}ms`);
+    };
+
+    if (COSMETIC_DELAY > 0) {
+        game.physicsStartTimer = setTimeout(beginPhysics, COSMETIC_DELAY);
+        console.log(`[ROUND] Round ${game.currentRound} scheduled — physics deferred ${COSMETIC_DELAY}ms for client cosmetic`);
+    } else {
+        beginPhysics();
+    }
 }
 
 // In-memory database (in production, use PostgreSQL or MongoDB)
@@ -324,6 +581,17 @@ const Database = {
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
+    // TON deposit webhook (tonapi.io pushes here on every USDT transfer to game wallet)
+    if (req.method === 'POST' && req.url === '/ton-webhook') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString().slice(0, 8192); });
+        req.on('end', () => {
+            try { handleTONWebhook(JSON.parse(body)); } catch (e) { console.error('[TON] Webhook parse error:', e.message); }
+            res.writeHead(200); res.end('ok');
+        });
+        return;
+    }
+
     // Serve static files
     if (req.url === '/healthz') {
         res.writeHead(200);
@@ -358,30 +626,40 @@ function serveFile(res, filename, contentType) {
 }
 
 // Create WebSocket server
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, perMessageDeflate: false });
 
 console.log(`Server starting on port ${PORT}...`);
 
 // WebSocket connection handler
 wss.on('connection', (ws) => {
+    ws._socket.setNoDelay(true);
     console.log('New client connected');
 
     const socketId = generateId();
     Database.activeSockets.set(socketId, { ws, userId: null });
 
-    // Rate limiting: max 40 messages per 5 seconds per socket
+    // Rate limiting: 60fps paddle moves + overhead = ~400 per 5s during active play
     let msgCount = 0;
     let rateLimitWindow = Date.now();
-    const RATE_LIMIT = 40;
+    const RATE_LIMIT = 400;
     const RATE_WINDOW_MS = 5000;
 
+    // Native WebSocket keepalive — prevents mobile OS from killing idle TCP connections
+    const keepalive = setInterval(() => {
+        if (ws.readyState === 1) ws.ping();
+    }, 25000);
+
     // Handle messages from client
-    ws.on('message', (message) => {
-        // Sliding window rate check
+    ws.on('message', (message, isBinary) => {
+        if (message.length > 4096) {
+            console.warn(`[SECURITY] Oversized message from ${socketId}, length=${message.length}`);
+            return;
+        }
+        // Fixed-window rate check
         const now = Date.now();
         if (now - rateLimitWindow > RATE_WINDOW_MS) {
             msgCount = 0;
-            rateLimitWindow = now;
+            rateLimitWindow = rateLimitWindow + RATE_WINDOW_MS;
         }
         msgCount++;
         if (msgCount > RATE_LIMIT) {
@@ -392,8 +670,12 @@ wss.on('connection', (ws) => {
         }
 
         try {
-            const data = JSON.parse(message);
-            handleClientMessage(socketId, ws, data);
+            if (isBinary) {
+                handleBinaryClientMessage(socketId, ws, message);
+            } else {
+                const data = JSON.parse(message.toString());
+                handleClientMessage(socketId, ws, data);
+            }
         } catch (error) {
             console.error('Error parsing message:', error);
         }
@@ -401,7 +683,7 @@ wss.on('connection', (ws) => {
 
     // Handle disconnection
     ws.on('close', () => {
-        console.log('Client disconnected');
+        clearInterval(keepalive);
         handleDisconnect(socketId);
     });
 
@@ -411,7 +693,9 @@ wss.on('connection', (ws) => {
 
 // Handle messages from clients
 function handleClientMessage(socketId, ws, data) {
-    console.log(`[WS<-] ${data.type} from socket ${socketId}`, JSON.stringify(data).substring(0, 200));
+    if (data.type !== 'paddleMove' && data.type !== 'pong' && data.type !== 'echo') {
+        console.log(`[WS<-] ${data.type} from socket ${socketId}`, JSON.stringify(data).substring(0, 120));
+    }
 
     const socketInfo = Database.activeSockets.get(socketId);
 
@@ -434,17 +718,35 @@ function handleClientMessage(socketId, ws, data) {
             handleGetBalance(socketId, ws, data);
             break;
 
-        case 'deposit':
-            // Client-triggered deposits are disabled — balance is only credited by
-            // verified blockchain callbacks or admin. Silently ignore to not break UI flow.
-            safeSend(ws, { type: 'info', message: 'Deposits are processed via blockchain confirmation.' });
+        case 'requestDeposit':
+            safeSend(ws, {
+                type: 'depositInfo',
+                walletAddress: GAME_WALLET,
+                memo: String(data.userId),
+                minAmount: MIN_DEPOSIT,
+            });
+            break;
+
+        case 'deposit': // legacy stub — silently ignore
             break;
 
         case 'adminCredit':
             handleAdminCredit(socketId, ws, data);
             break;
 
-        case 'withdraw':
+        case 'adminSweepFees':
+            handleSweepFees(socketId, ws, data);
+            break;
+
+        case 'adminFeeBalance':
+            handleFeeBalance(socketId, ws);
+            break;
+
+        case 'requestWithdrawal':
+            handleWithdraw(socketId, ws, data);
+            break;
+
+        case 'withdraw': // legacy — route to new handler
             handleWithdraw(socketId, ws, data);
             break;
 
@@ -553,6 +855,10 @@ function handleClientMessage(socketId, ws, data) {
             handleResync(socketId, ws, data);
             break;
 
+        case 'echo':
+            safeSend(ws, { type: 'echo', t: data.t });
+            break;
+
         case 'gameTimeout':
             handleGameTimeout(socketId, ws, data);
             break;
@@ -593,6 +899,7 @@ function handleRegister(socketId, ws, data) {
         Database.referralCodes.set(refCode, userId);
         Database.users.set(userId, {
             name: userName,
+            languageCode: data.languageCode || 'en',
             balance: 100,
             socketId: socketId,
             wins: 0,
@@ -610,13 +917,14 @@ function handleRegister(socketId, ws, data) {
         loadUserStats(userId).then(saved => {
             const user = Database.users.get(userId);
             if (!user || !saved) return;
-            user.balance      = saved.balance      ?? 100;
-            user.elo          = saved.elo          ?? ELO_START;
-            user.wins         = saved.wins         ?? 0;
-            user.losses       = saved.losses       ?? 0;
-            user.earnings     = saved.earnings     ?? 0;
-            user.matchesPlayed = saved.matches_played ?? 0;
-            user.totalWagered  = saved.total_wagered  ?? 0;
+            user.balance             = saved.balance             ?? 100;
+            user.elo                 = saved.elo                ?? ELO_START;
+            user.wins                = saved.wins               ?? 0;
+            user.losses              = saved.losses             ?? 0;
+            user.earnings            = saved.earnings           ?? 0;
+            user.matchesPlayed       = saved.matches_played     ?? 0;
+            user.totalWagered        = saved.total_wagered      ?? 0;
+            user.nameChangesRemaining = saved.name_changes_remaining ?? 3;
             const sock = getSocketByUserId(userId);
             safeSend(sock, { type: 'balance', balance: user.balance });
             console.log(`[DB] Restored stats for ${userName}: balance=${user.balance} elo=${user.elo}`);
@@ -625,6 +933,7 @@ function handleRegister(socketId, ws, data) {
         const user = Database.users.get(userId);
         user.socketId = socketId;
         user.name = userName;
+        if (data.languageCode) user.languageCode = data.languageCode;
     }
 
     console.log(`User registered: ${userName} (${userId})`);
@@ -673,6 +982,25 @@ function handleRegister(socketId, ws, data) {
         elo: user.elo || ELO_START,
         matchesPlayed: user.matchesPlayed || 0
     }));
+
+    // If there's a pending rematch offer for this user (sent while they were disconnected),
+    // resend it so they don't miss the invite after a reconnect/reload.
+    Database.rematches.forEach((meta, rematchId) => {
+        if (meta.opponentId === userId && meta.requesterId) {
+            safeSend(ws, {
+                type: 'rematchOffer',
+                rematchId,
+                requesterId: meta.requesterId,
+                requesterName: meta.requesterName,
+                betAmount: meta.betAmount,
+                gameMode: meta.gameMode
+            });
+        }
+    });
+
+    // Push current room list immediately so client sees rooms without waiting for poll
+    const waitingRooms = getWaitingRooms();
+    ws.send(JSON.stringify({ type: 'roomsList', rooms: waitingRooms }));
 }
 
 function generateReferralCode(userId) {
@@ -858,34 +1186,69 @@ function handleAdminCredit(socketId, ws, data) {
     console.log(`[ADMIN] ${requesterId} credited $${amount} to ${targetUserId}`);
 }
 
-// Handle withdrawal
+// Admin: check accumulated platform fees
+function handleFeeBalance(socketId, ws) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    if (!socketInfo || !ADMIN_IDS.has(String(socketInfo.userId))) {
+        safeSend(ws, { type: 'error', message: 'Unauthorized' }); return;
+    }
+    safeSend(ws, { type: 'feeBalance', accumulated: _platformFeesAccumulated });
+}
+
+// Admin: manually trigger fee sweep (uses OWNER_WALLET by default, or custom address)
+async function handleSweepFees(socketId, ws, data) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    if (!socketInfo || !ADMIN_IDS.has(String(socketInfo.userId))) {
+        safeSend(ws, { type: 'error', message: 'Unauthorized' }); return;
+    }
+    if (_platformFeesAccumulated < 0.01) { safeSend(ws, { type: 'sweepResult', success: false, reason: 'Nothing to sweep' }); return; }
+    if (_sweepInProgress) { safeSend(ws, { type: 'sweepResult', success: false, reason: 'Sweep already in progress' }); return; }
+
+    const toAddr = String(data.toAddress || OWNER_WALLET).trim();
+    const sweepAmount = _platformFeesAccumulated;
+
+    try {
+        await executeSweep(toAddr);
+        safeSend(ws, { type: 'sweepResult', success: true, amount: sweepAmount, toAddress: toAddr });
+    } catch (e) {
+        safeSend(ws, { type: 'sweepResult', success: false, reason: e.message });
+    }
+}
+
+// Handle withdrawal — sends real USDT on-chain from hot wallet
 function handleWithdraw(socketId, ws, data) {
-    const userId = data.userId;
-    const amount = parseFloat(data.amount);
+    const userId  = String(data.userId);
+    const amount  = parseFloat(data.amount);
+    const toAddr  = String(data.address || data.toAddress || '').trim();
+    const user    = Database.users.get(userId);
 
-    const user = Database.users.get(userId);
+    const fail = reason => safeSend(ws, { type: 'withdrawalResult', success: false, reason });
 
-    // Anti-smurf: must have wagered at least $10 before withdrawing
-    if (user && (user.totalWagered || 0) < 10) {
-        safeSend(ws, { type: 'error', message: 'You must wager at least $10 before withdrawing.' });
-        return;
-    }
+    if (!user)                              return fail('User not found');
+    if (!amount || amount < MIN_WITHDRAW)   return fail(`Minimum withdrawal is $${MIN_WITHDRAW} USDT`);
+    if (user.balance < amount)              return fail('Insufficient balance');
+    if ((user.totalWagered || 0) < WITHDRAW_ANTI_WAGER)
+                                            return fail(`Play at least $${WITHDRAW_ANTI_WAGER} in matches first`);
+    if (!/^(UQ|EQ|0:)[A-Za-z0-9_-]{46,}/.test(toAddr))
+                                            return fail('Invalid TON wallet address');
 
-    if (user && user.balance >= amount) {
-        const fee = parseFloat((amount * 0.01).toFixed(4));
-        const netPayout = parseFloat((amount - fee).toFixed(4));
-        user.balance -= amount;
+    // Deduct immediately — refund if transfer fails
+    user.balance -= amount;
+    safeSend(ws, { type: 'balance', balance: user.balance });
 
-        ws.send(JSON.stringify({ type: 'balance', balance: user.balance }));
-        ws.send(JSON.stringify({ type: 'withdrawalProcessed', amount, fee, netPayout }));
-
-        console.log(`Withdrawal: User ${userId} withdrew ${amount} (fee $${fee}, net $${netPayout})`);
-    } else {
-        ws.send(JSON.stringify({
-            type: 'error',
-            message: 'Insufficient balance'
-        }));
-    }
+    sendUSDTTransfer(toAddr, amount)
+        .then(() => {
+            persistUserStats(userId, user);
+            logTransaction(userId, 'withdrawal', amount, null, null);
+            safeSend(ws, { type: 'withdrawalResult', success: true, amount, toAddress: toAddr });
+            console.log(`[TON] Withdrawal: $${amount} USDT → ${toAddr} for user ${userId}`);
+        })
+        .catch(e => {
+            user.balance += amount; // refund
+            safeSend(ws, { type: 'balance', balance: user.balance });
+            fail('Transfer failed: ' + e.message);
+            console.error('[TON] Withdrawal failed:', e.message);
+        });
 }
 
 // Create game
@@ -895,17 +1258,8 @@ function handleCreateGame(socketId, ws, data) {
 
     const user = Database.users.get(userId);
 
-    if (!user || user.balance < betAmount) {
-        ws.send(JSON.stringify({
-            type: 'error',
-            message: 'Insufficient balance'
-        }));
-        return;
-    }
-
-    // New-account stake limit — prevents smurf accounts from farming high-stakes rooms
-    if ((user.matchesPlayed || 0) < NEW_ACCOUNT_MATCHES && betAmount > NEW_ACCOUNT_MAX_BET) {
-        safeSend(ws, { type: 'error', message: `New accounts are limited to $${NEW_ACCOUNT_MAX_BET} bets for the first ${NEW_ACCOUNT_MATCHES} matches.` });
+    if (!user || (betAmount > 0 && user.balance < betAmount)) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Insufficient balance' }));
         return;
     }
 
@@ -928,47 +1282,50 @@ function handleCreateGame(socketId, ws, data) {
         status: 'waiting',
         score: { player1: 0, player2: 0 },
         currentRound: 1,
-        ball: { x: 0, y: 0, speedX: 0, speedY: 0 }
+        ball: { x: 0, y: 0, speedX: 0, speedY: 0 },
+        createdAt: Date.now(),
+        startedAt: null
     };
 
     Database.games.set(gameId, game);
 
     console.log(`Game created: ${gameId} by ${user.name} with bet ${betAmount}`);
 
-    ws.send(JSON.stringify({
-        type: 'gameCreated',
-        game: game
-    }));
-
-    // Update balance
-    ws.send(JSON.stringify({
-        type: 'balance',
-        balance: user.balance
-    }));
+    ws.send(JSON.stringify({ type: 'gameCreated', game: game }));
+    ws.send(JSON.stringify({ type: 'balance', balance: user.balance }));
+    broadcastRoomsList();
 }
 
-// Get available games (filtered by budget only — mode filter removed so all rooms are visible)
-function handleGetGames(socketId, ws, data) {
-    const maxBudget = parseFloat(data.maxBudget) || 9999;
-    const availableRooms = [];
-
+function getWaitingRooms() {
+    const rooms = [];
     Database.games.forEach(game => {
-        if (game.status === 'waiting' &&
-            game.betAmount <= maxBudget) {
-            availableRooms.push({
+        if (game.status === 'waiting') {
+            rooms.push({
                 id: game.id,
                 playerName: game.creatorName,
                 playerId: game.creatorId,
+                languageCode: Database.users.get(game.creatorId)?.languageCode || 'en',
                 mode: game.gameMode || 'classic',
                 amount: game.betAmount
             });
         }
     });
+    return rooms;
+}
 
-    ws.send(JSON.stringify({
-        type: 'roomsList',
-        rooms: availableRooms
-    }));
+function broadcastRoomsList() {
+    const rooms = getWaitingRooms();
+    const msg = JSON.stringify({ type: 'roomsList', rooms });
+    Database.activeSockets.forEach(({ ws }) => {
+        if (ws.readyState === 1) ws.send(msg);
+    });
+}
+
+// Get available games (filtered by budget only — mode filter removed so all rooms are visible)
+function handleGetGames(socketId, ws, data) {
+    const maxBudget = parseFloat(data.maxBudget) || 9999;
+    const availableRooms = getWaitingRooms().filter(r => r.amount <= maxBudget);
+    ws.send(JSON.stringify({ type: 'roomsList', rooms: availableRooms }));
 }
 
 // Join game — server-authoritative countdown then match start
@@ -993,18 +1350,12 @@ function handleJoinGame(socketId, ws, data) {
         return;
     }
 
-    if (!user || user.balance < game.betAmount) {
+    if (!user || (game.betAmount > 0 && user.balance < game.betAmount)) {
         console.log(`[JOIN] FAIL — insufficient balance`);
         ws.send(JSON.stringify({ type: 'joinFailed', reason: 'Insufficient balance' }));
         return;
     }
 
-
-    // New-account stake limit
-    if ((user.matchesPlayed || 0) < NEW_ACCOUNT_MATCHES && game.betAmount > NEW_ACCOUNT_MAX_BET) {
-        ws.send(JSON.stringify({ type: 'joinFailed', reason: `New accounts are limited to $${NEW_ACCOUNT_MAX_BET} bets for the first ${NEW_ACCOUNT_MATCHES} matches.` }));
-        return;
-    }
 
     // Deduct bet
     user.balance -= game.betAmount;
@@ -1015,6 +1366,7 @@ function handleJoinGame(socketId, ws, data) {
     game.player2Name = user.name;
     game.status = 'countdown';
 
+    broadcastRoomsList();
     console.log(`[JOIN] SUCCESS — ${game.player1Name} vs ${game.player2Name}, starting countdown`);
 
     const player1Socket = getSocketByUserId(game.player1Id);
@@ -1124,6 +1476,79 @@ function safeSend(ws, data) {
     }
 }
 
+function safeSendBinary(ws, buf) {
+    try {
+        if (ws && ws.readyState === 1) ws.send(buf);
+    } catch (e) {
+        console.error('[WS] safeSendBinary error:', e.message);
+    }
+}
+
+function broadcastBinaryToGame(game, buf) {
+    safeSendBinary(getSocketByUserId(game.player1Id), buf);
+    safeSendBinary(getSocketByUserId(game.player2Id), buf);
+}
+
+// Build binary gameState buffer (37 bytes, little-endian)
+// type=1 | ballX f32 | ballY f32 | spdX f32 | spdY f32 | pad1X f32 | pad2X f32 | ramp f32 | t f64
+function makeBinaryGameState(ball, paddle1X, paddle2X, ramp, t) {
+    const buf = Buffer.allocUnsafe(37);
+    buf.writeUInt8(1, 0);
+    buf.writeFloatLE(ball.x, 1);
+    buf.writeFloatLE(ball.y, 5);
+    buf.writeFloatLE(ball.speedX, 9);
+    buf.writeFloatLE(ball.speedY, 13);
+    buf.writeFloatLE(paddle1X, 17);
+    buf.writeFloatLE(paddle2X, 21);
+    buf.writeFloatLE(ramp, 25);
+    buf.writeDoubleLE(t, 29);
+    return buf;
+}
+
+// Handle binary messages from client
+// Client→Server types: 1=paddleMove(xFraction f32, t f64), 2=pong(t f64), 3=echo(t f64)
+function handleBinaryClientMessage(socketId, ws, buf) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    if (!socketInfo) return;
+    const type = buf.readUInt8(0);
+
+    if (type === 1 && buf.length >= 13) {
+        // Binary paddleMove: xFraction (f32 LE) + t (f64 LE)
+        const xFraction = Math.max(0, Math.min(1, buf.readFloatLE(1)));
+        const userId = socketInfo.userId;
+        if (!userId) return;
+        // Find active game for this player
+        const _px = xFraction * (WORLD_W - PADDLE_W);
+        Database.games.forEach(game => {
+            if (game.status !== 'active') return;
+            if (game.player1Id === userId && game.paddle1) {
+                game.paddle1.x = _px;
+            } else if (game.player2Id === userId && game.paddle2) {
+                game.paddle2.x = _px;
+            }
+        });
+    } else if (type === 2 && buf.length >= 9) {
+        // Binary pong: t (f64 LE)
+        const t = buf.readDoubleLE(1);
+        handlePong(socketId, { t });
+    } else if (type === 3 && buf.length >= 9) {
+        // Binary echo: reply with same t so client can measure RTT
+        const t = buf.readDoubleLE(1);
+        const reply = Buffer.allocUnsafe(9);
+        reply.writeUInt8(3, 0);
+        reply.writeDoubleLE(t, 1);
+        safeSendBinary(ws, reply);
+    } else if (type === 4 && buf.length >= 17) {
+        // Client hit report: ball_x(f32) ball_y(f32) speed_x(f32) speed_y(f32) [paddle_x(f32)]
+        const bx  = buf.readFloatLE(1);
+        const by  = buf.readFloatLE(5);
+        const bsx = buf.readFloatLE(9);
+        const bsy = buf.readFloatLE(13);
+        const clientPaddleX = buf.length >= 21 ? buf.readFloatLE(17) : null;
+        handleClientHitReport(socketId, bx, by, bsx, bsy, clientPaddleX);
+    }
+}
+
 // Cancel a game that's in countdown
 function cancelCountdownGame(game, reason) {
     if (game.countdownTimer) { clearInterval(game.countdownTimer); game.countdownTimer = null; }
@@ -1150,6 +1575,7 @@ function cancelCountdownGame(game, reason) {
 
     // Remove game
     Database.games.delete(game.id);
+    broadcastRoomsList();
     console.log(`[MATCH] Cancelled: ${game.id} — ${reason}`);
 }
 
@@ -1187,20 +1613,24 @@ function handleClientReady(socketId, ws, data) {
 
     // Check if both ready
     if (game.p1Ready && game.p2Ready) {
-        // Clear ready timeout
         if (game.readyTimeout) { clearTimeout(game.readyTimeout); game.readyTimeout = null; }
-
         console.log(`[MATCH] Both players ready — starting race countdown`);
         startRaceCountdown(game);
     }
 }
 
-// Start the 5-second race countdown (NFS style)
+// Start the race countdown — clients send roundReady immediately on receipt
 function startRaceCountdown(game) {
     game.status = 'racing';
+    game.startedAt = Date.now();
     const RACE_DURATION = 5000;
     const startAt = Date.now() + 300; // 300ms buffer for network
     game.raceStartAt = startAt;
+
+    // Set roundReadyFlags NOW so that roundReady messages sent by clients on
+    // raceCountdown receipt are accepted immediately (not ignored for 5s).
+    // Previously this was only set in the gameplayStart callback, causing a ~9s freeze.
+    game.roundReadyFlags = { player1: false, player2: false };
 
     const p1 = getSocketByUserId(game.player1Id);
     const p2 = getSocketByUserId(game.player2Id);
@@ -1210,12 +1640,18 @@ function startRaceCountdown(game) {
     safeSend(p1, msg);
     safeSend(p2, msg);
 
-    // Schedule gameplay start
+    // Schedule gameplayStart as a safety fallback (fires 5s later)
+    // If both clients send roundReady quickly, startNewRound fires long before this.
     const gameplayStartAt = startAt + RACE_DURATION;
     game.raceTimer = setTimeout(() => {
         game.raceTimer = null;
 
-        // Verify still connected
+        // Round already started (both clients sent roundReady in time) — skip
+        if (game.status !== 'racing') {
+            console.log(`[RACE] gameplayStart timer fired but game is '${game.status}', skipping`);
+            return;
+        }
+
         const pp1 = getSocketByUserId(game.player1Id);
         const pp2 = getSocketByUserId(game.player2Id);
         if (!pp1 || !pp2) {
@@ -1224,24 +1660,24 @@ function startRaceCountdown(game) {
             return;
         }
 
-        // Don't start physics yet — wait for both clients to send roundReady
+        // Fallback path: clients were slow — transition and force-start
         game.status = 'roundCooldown';
         game.score = { player1: 0, player2: 0 };
         game.currentRound = 1;
-        game.roundReadyFlags = { player1: false, player2: false };
-        initBallForRound(game); // pre-init so resync can send state
+        // roundReadyFlags already set above — don't reset (may be partially filled)
+        initBallForRound(game);
         const startMsg = { type: 'gameplayStart', roomId: game.id, serverTime: Date.now() };
-        console.log(`[RACE] Broadcasting gameplayStart`);
+        console.log(`[RACE] Broadcasting gameplayStart (fallback — clients were slow)`);
         safeSend(pp1, startMsg);
         safeSend(pp2, startMsg);
-        // Safety fallback: start anyway if a client is slow
+        // Safety: start anyway after 4s more if client still hasn't responded
         game.roundReadyTimeout = setTimeout(() => {
             game.roundReadyTimeout = null;
             if (game.status === 'roundCooldown') {
                 console.log(`[ROUND] Round 1 timeout — starting anyway`);
                 startNewRound(game);
             }
-        }, 5000);
+        }, 4000);
     }, gameplayStartAt - Date.now());
 }
 
@@ -1315,74 +1751,16 @@ function handlePaddleMove(socketId, ws, data) {
     const socketInfo = Database.activeSockets.get(socketId);
     const userId = socketInfo.userId;
 
-    // Anti-cheat: Timing validation
-    if (!Database.paddleMoveTiming.has(userId)) {
-        Database.paddleMoveTiming.set(userId, {
-            lastMoveTime: currentTime,
-            moveCounts: [],
-            totalMoves: 0
-        });
-    }
-
-    const timing = Database.paddleMoveTiming.get(userId);
-
-    // Check if move is too fast (0ms = bot-like behavior)
-    const timeSinceLastMove = currentTime - timing.lastMoveTime;
-
-    if (timeSinceLastMove === 0 && timing.totalMoves > 5) {
-        // Suspicious: Multiple 0ms moves
-        flagSuspiciousActivity(userId, 'Bot-like paddle movements (0ms timing)');
-        console.warn(`Suspicious activity detected: User ${userId} - 0ms paddle moves`);
-    }
-
-    // Track move timing
-    timing.moveCounts.push(timeSinceLastMove);
-    timing.lastMoveTime = currentTime;
-    timing.totalMoves++;
-
-    // Keep only last 20 moves for analysis
-    if (timing.moveCounts.length > 20) {
-        timing.moveCounts.shift();
-    }
-
-    // Analyze pattern - if too many moves with identical timing, flag it
-    if (timing.moveCounts.length >= 10) {
-        const avgTiming = timing.moveCounts.reduce((a, b) => a + b, 0) / timing.moveCounts.length;
-        const variance = timing.moveCounts.reduce((sum, val) => sum + Math.pow(val - avgTiming, 2), 0) / timing.moveCounts.length;
-
-        // Very low variance = robotic pattern
-        if (variance < 5 && avgTiming < 50) {
-            flagSuspiciousActivity(userId, 'Robotic paddle pattern detected');
-        }
-    }
-
     // Update server-side paddle position from normalized fraction
     // Client sends xFraction (0-1); server maps to virtual world x-coordinate
     const xFraction = Math.max(0, Math.min(1, data.xFraction !== undefined ? data.xFraction : (data.x || 0) / WORLD_W));
     const vx = xFraction * (WORLD_W - PADDLE_W);
     if (userId === game.player1Id && game.paddle1) {
         game.paddle1.x = vx;
-        if (!game.paddle1History) game.paddle1History = [];
-        game.paddle1History.push({ x: vx, t: currentTime });
-        if (game.paddle1History.length > 20) game.paddle1History.shift();
     } else if (userId === game.player2Id && game.paddle2) {
         game.paddle2.x = vx;
-        if (!game.paddle2History) game.paddle2History = [];
-        game.paddle2History.push({ x: vx, t: currentTime });
-        if (game.paddle2History.length > 20) game.paddle2History.shift();
     }
     // No per-paddle broadcast — serverTick broadcasts all positions every 16ms
-}
-
-// Return the paddle x closest to (now - lagMs) from history, fallback to current
-function getLagPaddleX(history, currentX, lagMs) {
-    if (!history || history.length === 0) return currentX;
-    const target = Date.now() - lagMs;
-    let best = history[0];
-    for (const h of history) {
-        if (Math.abs(h.t - target) < Math.abs(best.t - target)) best = h;
-    }
-    return best.x;
 }
 
 // Handle pong reply — compute RTT and store on game
@@ -1390,10 +1768,85 @@ function handlePong(socketId, data) {
     const socketInfo = Database.activeSockets.get(socketId);
     if (!socketInfo) return;
     const userId = socketInfo.userId;
-    const rtt = Math.min(Date.now() - data.t, 500);
+    const rawRtt = Math.min(Date.now() - data.t, 500);
+    // EMA smoothing (α=0.35) so single spike pings don't instantly inflate the lag buffer
     Database.games.forEach(game => {
-        if (game.player1Id === userId) game.player1RTT = rtt;
-        if (game.player2Id === userId) game.player2RTT = rtt;
+        if (game.player1Id === userId)
+            game.player1RTT = Math.round(game.player1RTT ? game.player1RTT * 0.5 + rawRtt * 0.5 : rawRtt);
+        if (game.player2Id === userId)
+            game.player2RTT = Math.round(game.player2RTT ? game.player2RTT * 0.5 + rawRtt * 0.5 : rawRtt);
+    });
+}
+
+// Client-reported hit — fires when client locally predicts a paddle bounce.
+// Server validates (ball approaching, X within paddle bounds) and applies bounce.
+// This closes the RTT/2 timing gap where the server sees a stale paddle position.
+function handleClientHitReport(socketId, bx, by, bsx, bsy, clientPaddleX) {
+    const socketInfo = Database.activeSockets.get(socketId);
+    if (!socketInfo) return;
+    const userId = socketInfo.userId;
+
+    Database.games.forEach(game => {
+        if (!game.ball || game.status !== 'active') {
+            if (game.status === 'roundCooldown') {
+                const msSinceScore = game.lastScoreTime ? Date.now() - game.lastScoreTime : '?';
+                console.log(`[HIT-CLIENT] LATE by ~${msSinceScore}ms (status=roundCooldown) — hit arrived after round ended`);
+            }
+            return;
+        }
+        const isP1 = game.player1Id === userId;
+        const isP2 = game.player2Id === userId;
+        if (!isP1 && !isP2) return;
+
+        // Rescue from pending miss — late hit report arriving within the 200ms grace window
+        // restores the ball to the pre-cross snapshot, cancels the score, and resumes physics.
+        if (game.pendingMiss) {
+            const missingPlayer = game.pendingMiss.scoredBy === 'player1' ? 'player2' : 'player1';
+            const reporterMatches = (isP1 && missingPlayer === 'player1') || (isP2 && missingPlayer === 'player2');
+            if (!reporterMatches) return; // wrong player reporting — ignore so the genuine miss commits
+            clearTimeout(game.pendingMissTimer);
+            game.pendingMissTimer = null;
+            const snap = game.pendingMiss.ballSnapshot;
+            game.ball.x = snap.x;
+            game.ball.y = snap.y;
+            game.ball.speedX = snap.speedX;
+            game.ball.speedY = snap.speedY;
+            game.pendingMiss = null;
+            startPhysicsLoop(game);
+            console.log(`[HIT-CLIENT] ${isP1 ? 'P1' : 'P2'} RESCUED from pending miss — ball restored, physics resumed`);
+        }
+
+        // Rate-limit: max 1 client hit per ~300ms per player
+        const hitKey = isP1 ? 'p1LastClientHit' : 'p2LastClientHit';
+        const now = Date.now();
+        if (game[hitKey] && now - game[hitKey] < 300) {
+            console.log(`[HIT-CLIENT] ${isP1?'P1':'P2'} RATE-LIMITED (${now - game[hitKey]}ms since last)`);
+            return;
+        }
+
+        const ball = game.ball;
+        const label = isP1 ? 'P1' : 'P2';
+
+        // Use client-reported paddle X if provided — handles delayed paddle-move messages on phone
+        const serverPaddleX = isP1 ? game.paddle1.x : game.paddle2.x;
+        let paddleX = serverPaddleX;
+        if (clientPaddleX !== null && clientPaddleX !== undefined && !isNaN(clientPaddleX)) {
+            const clamped = Math.max(0, Math.min(WORLD_W - PADDLE_W, clientPaddleX));
+            if (isP1) game.paddle1.x = clamped;
+            else game.paddle2.x = clamped;
+            paddleX = clamped;
+        }
+
+        // Apply the bounce using reported hit position for angle
+        game[hitKey] = now;
+        const relX = Math.max(0, Math.min(1, (bx - paddleX) / PADDLE_W));
+        const angle = (relX - 0.5) * (Math.PI / 3);
+        const spd = Math.min(MAX_SPEED, Math.sqrt(ball.speedX ** 2 + ball.speedY ** 2) + BASE_SPEED * 0.08);
+        ball.speedX = Math.sin(angle) * spd;
+        ball.speedY = isP1 ? -Math.abs(Math.cos(angle) * spd) : Math.abs(Math.cos(angle) * spd);
+        ball.y = isP1 ? P1_Y - BALL_R : P2_Y + PADDLE_H + BALL_R;
+        ball.hitCount++;
+        console.log(`[HIT-CLIENT] ${isP1 ? 'P1' : 'P2'} bx=${bx.toFixed(1)} paddleX=${paddleX.toFixed(1)} serverWas=${serverPaddleX.toFixed(1)}`);
     });
 }
 
@@ -1402,11 +1855,12 @@ function startPingLoop(game) {
     if (game.pingInterval) return;
     game.pingInterval = setInterval(() => {
         const now = Date.now();
-        const p1 = getSocketByUserId(game.player1Id);
-        const p2 = getSocketByUserId(game.player2Id);
-        safeSend(p1, { type: 'ping', t: now });
-        safeSend(p2, { type: 'ping', t: now });
-    }, 2000);
+        const pingBuf = Buffer.allocUnsafe(9);
+        pingBuf.writeUInt8(2, 0);
+        pingBuf.writeDoubleLE(now, 1);
+        safeSendBinary(getSocketByUserId(game.player1Id), pingBuf);
+        safeSendBinary(getSocketByUserId(game.player2Id), pingBuf);
+    }, 500);
 }
 function stopPingLoop(game) {
     if (game.pingInterval) { clearInterval(game.pingInterval); game.pingInterval = null; }
@@ -1432,49 +1886,6 @@ function flagSuspiciousActivity(userId, reason) {
 }
 
 // Start game logic (server-side physics)
-function startGameLogic(game) {
-    // Initialize ball position (simplified - full physics on server)
-    game.ball = {
-        x: 200,
-        y: 300,
-        speedX: 3,
-        speedY: 3
-    };
-
-    // Simulate game rounds (in production, this would be real-time physics)
-    simulateGame(game);
-}
-
-// Simulate game (simplified for demo)
-function simulateGame(game) {
-    // Simulate rounds with random winner
-    setTimeout(() => {
-        const winner = Math.random() > 0.5 ? 1 : 2;
-
-        if (winner === 1) {
-            game.score.player1++;
-        } else {
-            game.score.player2++;
-        }
-
-        // Broadcast score update
-        broadcastToGame(game, {
-            type: 'gameUpdate',
-            score: game.score,
-            roundEnd: true,
-            roundWinner: winner
-        });
-
-        // Check if game is over (best of 3)
-        if (game.score.player1 === 2 || game.score.player2 === 2) {
-            endGame(game);
-        } else {
-            // Continue to next round
-            game.currentRound++;
-            simulateGame(game);
-        }
-    }, 5000); // Each round lasts 5 seconds (for demo)
-}
 
 // End game
 function endGame(game) {
@@ -1561,10 +1972,14 @@ function handleDisconnect(socketId) {
                 // Creator disconnected while waiting — just remove the room
                 console.log(`[DISCONNECT] Creator left waiting room: ${game.id}`);
                 Database.games.delete(game.id);
+                broadcastRoomsList();
             } else if (game.status === 'active' || game.status === 'roundCooldown') {
                 // Start 15-second grace period before forfeiting
                 console.log(`[DISCONNECT] Player left active game: ${game.id} — starting 15s grace`);
                 stopPhysicsLoop(game);
+                if (game.physicsStartTimer) { clearTimeout(game.physicsStartTimer); game.physicsStartTimer = null; }
+                if (game.pendingMissTimer) { clearTimeout(game.pendingMissTimer); game.pendingMissTimer = null; }
+                game.pendingMiss = null;
                 game.gracePeriodUserId = socketInfo.userId;
 
                 const opponentId = game.player1Id === socketInfo.userId ? game.player2Id : game.player1Id;
@@ -1582,16 +1997,24 @@ function handleDisconnect(socketId) {
         });
     }
 
+    if (socketInfo && socketInfo.userId) {
+        Database.paddleMoveTiming.delete(socketInfo.userId);
+    }
     Database.activeSockets.delete(socketId);
     broadcastOnlineCount();
 }
 
+let _onlineCountTimer = null;
 function broadcastOnlineCount() {
-    const count = Database.activeSockets.size;
-    const msg = JSON.stringify({ type: 'onlineCount', count });
-    Database.activeSockets.forEach(({ ws }) => {
-        if (ws.readyState === 1) ws.send(msg);
-    });
+    if (_onlineCountTimer) return;
+    _onlineCountTimer = setTimeout(() => {
+        _onlineCountTimer = null;
+        const count = Database.activeSockets.size;
+        const msg = JSON.stringify({ type: 'onlineCount', count });
+        Database.activeSockets.forEach(({ ws }) => {
+            if (ws.readyState === 1) ws.send(msg);
+        });
+    }, 500);
 }
 
 // Cancel game (waiting room)
@@ -1614,65 +2037,10 @@ function handleCancelGame(socketId, ws, data) {
             }
 
             Database.games.delete(gameId);
+            broadcastRoomsList();
             console.log(`Game ${gameId} cancelled by creator`);
         }
     });
-}
-
-// Server-authoritative score handling
-function handleScoreReport(socketId, ws, data) {
-    const gameId = data.gameId;
-    const scoredBy = data.scoredBy; // 'player1', 'player2', or 'tie'
-    const userId = data.userId;
-
-    const game = Database.games.get(gameId);
-    if (!game) return;
-    if (game.status !== 'active') {
-        console.log(`[SCORE] Ignoring scoreReport for game ${gameId} status=${game.status}`);
-        return;
-    }
-    if (userId !== game.player1Id && userId !== game.player2Id) return;
-
-    // Debounce: ignore duplicate reports within 300ms
-    const now = Date.now();
-    if (game.lastScoreTime && now - game.lastScoreTime < 300) {
-        console.log(`[SCORE] Debounced duplicate score for game ${gameId}`);
-        return;
-    }
-    game.lastScoreTime = now;
-
-    console.log(`[SCORE] Game ${gameId} round ${game.currentRound}: ${scoredBy} scored`);
-
-    if (scoredBy === 'player1') game.score.player1++;
-    else if (scoredBy === 'player2') game.score.player2++;
-
-    game.status = 'roundCooldown';
-    const COOLDOWN_MS = 3000;
-
-    broadcastToGame(game, {
-        type: 'roundCooldown',
-        score: { player1: game.score.player1, player2: game.score.player2 },
-        roundWinner: scoredBy,
-        currentRound: game.currentRound,
-        cooldownMs: COOLDOWN_MS,
-        serverTime: Date.now()
-    });
-
-    const MAX_ROUNDS = 3;
-    const gameOver = game.score.player1 >= 2 || game.score.player2 >= 2 || game.currentRound >= MAX_ROUNDS;
-
-    game.roundCooldownTimer = setTimeout(() => {
-        game.roundCooldownTimer = null;
-        if (gameOver) {
-            const winnerId = game.score.player1 > game.score.player2 ? game.player1Id :
-                             game.score.player2 > game.score.player1 ? game.player2Id : null;
-            endMultiplayerMatch(game, winnerId, 'score');
-        } else {
-            game.currentRound++;
-            game.status = 'active';
-            broadcastToGame(game, { type: 'roundResume', currentRound: game.currentRound, serverTime: Date.now() });
-        }
-    }, COOLDOWN_MS);
 }
 
 // End multiplayer match authoritatively
@@ -1681,6 +2049,9 @@ function endMultiplayerMatch(game, winnerId, reason) {
     stopPingLoop(game);
     if (game.roundReadyTimeout) { clearTimeout(game.roundReadyTimeout); game.roundReadyTimeout = null; }
     if (game.roundCooldownTimer) { clearTimeout(game.roundCooldownTimer); game.roundCooldownTimer = null; }
+    if (game.physicsStartTimer) { clearTimeout(game.physicsStartTimer); game.physicsStartTimer = null; }
+    if (game.pendingMissTimer) { clearTimeout(game.pendingMissTimer); game.pendingMissTimer = null; }
+    game.pendingMiss = null;
     game.status = 'finished';
     const isTie = !winnerId || winnerId === 'tie';
     const totalPot = game.betAmount * 2;
@@ -1739,6 +2110,32 @@ function endMultiplayerMatch(game, winnerId, reason) {
 
     console.log(`[GAME OVER] Game ${game.id} ended. Winner: ${winnerId || 'tie'}, reason: ${reason}`);
 
+    // Accumulate platform fee
+    if (!isTie && platformFee > 0) accumulatePlatformFee(platformFee);
+
+    // Log match to Supabase matches table (uses a proper UUID, not room ID)
+    const matchDbId = game.dbId || crypto.randomUUID();
+    game.dbId = matchDbId;
+    db.from('matches').upsert({
+        id: matchDbId,
+        player1_id: String(game.player1Id),
+        player2_id: String(game.player2Id),
+        status: 'finished',
+        stake_amount: game.betAmount,
+        winner_id: winnerId ? String(winnerId) : null,
+        created_at: new Date(game.createdAt || Date.now()).toISOString(),
+        started_at: new Date(game.startedAt || Date.now()).toISOString(),
+        ended_at: new Date().toISOString()
+    }, { onConflict: 'id' }).then(({ error }) => {
+        if (error) console.error('[DB] Match log error:', error.message);
+    });
+
+    // Log wager transactions for both players
+    if (game.betAmount > 0) {
+        logTransaction(game.player1Id, isTie ? 'wager_tie' : game.player1Id === winnerId ? 'wager_win' : 'wager_loss', game.betAmount, null, matchDbId);
+        logTransaction(game.player2Id, isTie ? 'wager_tie' : game.player2Id === winnerId ? 'wager_win' : 'wager_loss', game.betAmount, null, matchDbId);
+    }
+
     // Persist both players' updated stats to Supabase
     const _p1 = Database.users.get(game.player1Id);
     const _p2 = Database.users.get(game.player2Id);
@@ -1776,11 +2173,16 @@ function endMultiplayerMatch(game, winnerId, reason) {
     safeSend(p2Socket, makeMsg(game.player2Id));
 
     // Broadcast live ticker to all connected clients
-    if (!isTie && winner && loser) {
-        const s = game.score || { player1: 0, player2: 0 };
-        const hi = Math.max(s.player1, s.player2), lo = Math.min(s.player1, s.player2);
-        const tickerText = `${winner.name} beat ${loser.name} · $${game.betAmount} · ${hi}-${lo}`;
-        Database.activeSockets.forEach(info => safeSend(info.ws, { type: 'tickerUpdate', text: tickerText }));
+    if (!isTie && winnerId) {
+        const _winner = Database.users.get(winnerId);
+        const _loserId = winnerId === game.player1Id ? game.player2Id : game.player1Id;
+        const _loser = Database.users.get(_loserId);
+        if (_winner && _loser) {
+            const s = game.score || { player1: 0, player2: 0 };
+            const hi = Math.max(s.player1, s.player2), lo = Math.min(s.player1, s.player2);
+            const tickerText = `${_winner.name} beat ${_loser.name} · $${game.betAmount} · ${hi}-${lo}`;
+            Database.activeSockets.forEach(info => safeSend(info.ws, { type: 'tickerUpdate', text: tickerText }));
+        }
     }
 
     // Store rematch metadata
@@ -1930,12 +2332,21 @@ function handleRematchAccept(_socketId, ws, data) {
         betAmount: meta.betAmount,
         gameMode: meta.gameMode,
         status: 'readyCheck',
+        p1Ready: false,
+        p2Ready: false,
         score: { player1: 0, player2: 0 },
         currentRound: 1,
         ballSeed: Math.floor(Math.random() * 2147483647),
         roundCooldownTimer: null,
         lastScoreTime: 0
     };
+    // Safety: start anyway after 12s if a client doesn't send clientReady
+    game.readyTimeout = setTimeout(() => {
+        if (game.status === 'readyCheck') {
+            console.log(`[REMATCH] Ready timeout for game ${game.id} — cancelling`);
+            cancelCountdownGame(game, 'Match setup timed out');
+        }
+    }, 12000);
     Database.games.set(newGameId, game);
 
     const gameData = {
@@ -2034,8 +2445,8 @@ function handleGameTimeout(socketId, ws, data) {
     if (!game) return;
 
     if (winnerId) {
-        // Someone was ahead when time ran out
-        endGame(game);
+        // Someone was ahead when time ran out — use authoritative match end (handles ELO + stats)
+        endMultiplayerMatch(game, winnerId, 'timeout');
     } else {
         // Tie - return bets
         const player1 = Database.users.get(game.player1Id);
@@ -2239,4 +2650,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ WebSocket server ready on port ${PORT}`);
     console.log(`✅ Listening on all interfaces (0.0.0.0)`);
     console.log(`✅ Anti-cheat system active`);
+    loadPlatformFees();
+    initTONWallet().then(() => startTONPoller());
 });

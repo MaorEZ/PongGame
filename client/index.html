@@ -98,6 +98,9 @@
             <!-- Status bar -->
             <div class="gam-status-bar">
                 <span>GAM // ARENA</span>
+                <div id="serverIndicator" class="srv-indicator" style="display:none">
+                    <span class="srv-ping">--ms</span>
+                </div>
                 <div class="online-count" id="onlineCount">
                     <div class="online-dot"></div>
                     <span id="onlineCountText">connecting...</span>
@@ -227,77 +230,47 @@
                     </div>
                 </div>
                 <div class="slide-menu-content">
-                    <button class="menu-item" id="playAIBtn">
-                        <span class="menu-icon">🤖</span>
+                    <button class="menu-item mi-ink" id="statsBtn">
                         <div class="menu-text">
-                            <div class="menu-title">Practice vs AI</div>
-                            <div class="menu-desc">Test your skills</div>
-                        </div>
-                    </button>
-                    <button class="menu-item" id="depositBtn">
-                        <span class="menu-icon">💰</span>
-                        <div class="menu-text">
-                            <div class="menu-title">Deposit Funds</div>
-                            <div class="menu-desc">Add USDT to play</div>
-                        </div>
-                    </button>
-                    <button class="menu-item" id="withdrawBtn">
-                        <span class="menu-icon">💸</span>
-                        <div class="menu-text">
-                            <div class="menu-title">Withdraw</div>
-                            <div class="menu-desc">Cash out winnings</div>
-                        </div>
-                    </button>
-                    <button class="menu-item" id="customizationBtn">
-                        <span class="menu-icon">🎨</span>
-                        <div class="menu-text">
-                            <div class="menu-title">Customization</div>
-                            <div class="menu-desc">Unlock paddle skins</div>
-                        </div>
-                    </button>
-                    <button class="menu-item" id="statsBtn">
-                        <span class="menu-icon">📊</span>
-                        <div class="menu-text">
+                            <div class="menu-item-tag">▸ YOUR DATA</div>
                             <div class="menu-title">Statistics</div>
-                            <div class="menu-desc">View your stats</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
-                    <button class="menu-item" id="matchHistoryBtn">
-                        <span class="menu-icon">📋</span>
+                    <button class="menu-item mi-ink" id="matchHistoryBtn">
                         <div class="menu-text">
+                            <div class="menu-item-tag">▸ LAST 20</div>
                             <div class="menu-title">Match History</div>
-                            <div class="menu-desc">Last 20 matches</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
-                    <button class="menu-item" id="leaderboardBtn">
-                        <span class="menu-icon">🏆</span>
+                    <button class="menu-item mi-gold" id="leaderboardBtn">
                         <div class="menu-text">
+                            <div class="menu-item-tag">▸ GLOBAL RANK</div>
                             <div class="menu-title">Leaderboard</div>
-                            <div class="menu-desc">Top 10 players</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
-                    <button class="menu-item" id="changeNameBtn">
-                        <span class="menu-icon">✏️</span>
+                    <button class="menu-item mi-mute" id="changeNameBtn">
                         <div class="menu-text">
+                            <div class="menu-item-tag">▸ IDENTITY</div>
                             <div class="menu-title">Change Name</div>
-                            <div class="menu-desc">Update display name</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
-
-                    <button class="menu-item" id="referralBtn">
-                        <span class="menu-icon">🔗</span>
+                    <button class="menu-item mi-red" id="referralBtn">
                         <div class="menu-text">
+                            <div class="menu-item-tag">▸ EARN BONUS</div>
                             <div class="menu-title">Invite Friends</div>
-                            <div class="menu-desc">Earn bonus on their first win</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
-
-                    <button class="menu-item" id="supportBtn">
-                        <span class="menu-icon">❓</span>
+                    <button class="menu-item mi-mute" id="supportBtn">
                         <div class="menu-text">
+                            <div class="menu-item-tag">▸ HELP</div>
                             <div class="menu-title">Support</div>
-                            <div class="menu-desc">Get help</div>
                         </div>
+                        <span class="menu-arr">→</span>
                     </button>
                 </div>
             </div>
@@ -434,6 +407,9 @@
         <!-- Status bar -->
         <div class="gam-status-bar">
             <span>ARENA / FIND MATCH</span>
+            <div id="serverIndicatorRB" class="srv-indicator" style="display:none">
+                <span class="srv-ping">--ms</span>
+            </div>
             <span id="rbOpenCount" style="color:var(--red);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em">● 0 OPEN</span>
         </div>
 
@@ -466,6 +442,7 @@
                 <div class="rb-win-preview" id="rbWinPreview">WIN <span style="color:var(--red);font-weight:700">$19</span></div>
             </div>
             <div class="rb-stake-row">
+                <button class="rb-stake-btn rb-stake-free" data-stake="0">FREE</button>
                 <button class="rb-stake-btn" data-stake="5">$5</button>
                 <button class="rb-stake-btn selected" data-stake="10">$10</button>
                 <button class="rb-stake-btn" data-stake="20">$20</button>
@@ -607,13 +584,18 @@
 
             <div class="dep-div-label">▸ SEND USDT (TON) TO</div>
             <div class="dep-addr-card">
-                <div class="dep-addr-text" id="depositAddress">UQDr4z2c·9Lk1vP8nW·xY7tQ2bH4·gFmRsK</div>
+                <div class="dep-addr-text" id="depositAddress">loading...</div>
                 <button class="dep-copy-btn" id="copyAddressBtn">⎘ COPY ADDRESS</button>
             </div>
 
-            <div class="dep-qr-placeholder">▣ QR · TAP TO REVEAL</div>
+            <div class="dep-div-label" style="margin-top:10px;">▸ MEMO · REQUIRED</div>
+            <div class="dep-addr-card">
+                <div class="dep-addr-text" id="depositMemo">—</div>
+                <button class="dep-copy-btn" id="copyMemoBtn">⎘ COPY MEMO</button>
+            </div>
+            <div class="dep-addr-warn" style="color:var(--red)">▸ INCLUDE THIS MEMO · NO MEMO = DEPOSIT LOST</div>
 
-            <div class="dep-credit-row">
+            <div class="dep-credit-row" style="margin-top:10px;">
                 <span class="dep-credit-label">YOU CREDIT</span>
                 <span class="dep-credit-amt" id="depositCreditAmt">+$100</span>
             </div>
@@ -998,178 +980,111 @@
 
     <!-- Support/Report Screen -->
     <div id="supportScreen" class="screen">
-        <div class="container">
-            <button class="back-btn" id="backFromSupport">← Back</button>
-            <h2>Support & Report</h2>
-
-            <div class="support-content">
-                <div class="form-group">
-                    <label>Match ID (optional):</label>
-                    <input type="text" id="reportMatchId" placeholder="Enter Match ID">
-                </div>
-
-                <div class="form-group">
-                    <label>What happened? Describe the issue:</label>
-                    <textarea id="reportDescription" rows="5" placeholder="Describe the problem..."></textarea>
-                </div>
-
-                <button class="btn btn-primary" id="submitReportBtn">
-                    Submit Report
-                </button>
-
-                <div class="support-info">
-                    <p class="info-text">We'll review your report within 24 hours</p>
-                </div>
-            </div>
+        <div class="gam-status-bar">
+            <span>SUPPORT / REPORT</span>
+            <span style="color:var(--mute);font-family:var(--mono-f);font-size:9.5px;letter-spacing:0.1em;">24H RESPONSE</span>
         </div>
-    </div>
-
-    <!-- Customization Screen -->
-    <div id="customizationScreen" class="screen">
-        <!-- Sticky header with back navigation -->
-        <div class="customization-header">
-            <button class="back-btn" id="backFromCustomization">← Back</button>
-            <h2>Paddle Skins</h2>
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromSupport">← BACK</button>
+            <span class="rb-screen-title">SUPPORT</span>
+            <span></span>
         </div>
+        <div class="sup-scroll">
+            <div class="sup-eyebrow">▸ REPORT AN ISSUE</div>
+            <div class="sup-field-label">MATCH ID <span class="sup-optional">(optional)</span></div>
+            <input type="text" id="reportMatchId" class="sup-input" placeholder="e.g. 0x4f1c·9bd2…" autocomplete="off">
 
-        <!-- Scrollable content -->
-        <div class="customization-body">
-            <p class="info-text">Unlock paddle skins by wagering in matches!</p>
+            <div class="sup-field-label" style="margin-top:14px;">WHAT HAPPENED?</div>
+            <textarea id="reportDescription" class="sup-textarea" rows="5" placeholder="Describe the problem clearly…"></textarea>
 
-            <!-- Basic Skin - centered, own row -->
-            <div class="basic-skin-row">
-                <div class="paddle-skin-card basic-card" data-skin="default" id="basicSkinCard">
-                    <canvas class="paddle-preview-canvas" id="basicPreview" width="200" height="100"></canvas>
-                    <div class="skin-name">Basic</div>
-                    <div class="skin-price" style="color: rgba(255,255,255,0.4);">Free</div>
-                    <div class="skin-actions">
-                        <button class="btn btn-small skin-equip-btn" id="equipBasic">Equip</button>
-                        <button class="btn btn-small skin-try-btn" id="tryBasic">Try</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2x2 Grid: Frost, Void, Sakura, Solar -->
-            <div class="paddle-skins-grid">
-                <!-- Frost Paddle - PURCHASE $10 -->
-                <div class="paddle-skin-card" data-skin="frost" id="frostSkinCard">
-                    <canvas class="paddle-preview-canvas" id="frostPreview" width="200" height="100"></canvas>
-                    <div class="skin-name">Frost</div>
-                    <div class="skin-price">$10 USDT</div>
-                    <div class="skin-actions">
-                        <button class="btn btn-small skin-purchase-btn" id="purchaseFrost">Buy $10</button>
-                        <button class="btn btn-small skin-equip-btn" id="equipFrost" style="display:none;">Equip</button>
-                        <button class="btn btn-small skin-try-btn" id="tryFrost">Try</button>
-                    </div>
-                </div>
-
-                <!-- Void Paddle - PURCHASE $50 -->
-                <div class="paddle-skin-card" data-skin="void" id="voidSkinCard">
-                    <canvas class="paddle-preview-canvas" id="voidPreview" width="200" height="100"></canvas>
-                    <div class="skin-name">Void</div>
-                    <div class="skin-price">$50 USDT</div>
-                    <div class="skin-actions">
-                        <button class="btn btn-small skin-purchase-btn" id="purchaseVoid">Buy $50</button>
-                        <button class="btn btn-small skin-equip-btn" id="equipVoid" style="display:none;">Equip</button>
-                        <button class="btn btn-small skin-try-btn" id="tryVoid">Try</button>
-                    </div>
-                </div>
-
-                <!-- Sakura Paddle - UNLOCK BY WAGERING $100 -->
-                <div class="paddle-skin-card" data-skin="sakura" id="sakuraSkinCard">
-                    <canvas class="paddle-preview-canvas" id="sakuraPreview" width="200" height="100"></canvas>
-                    <div class="skin-name">Sakura</div>
-                    <div class="skin-requirement">Wager: $<span id="sakuraProgress">0</span> / $100</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="sakuraProgressBar" style="width: 0%"></div>
-                    </div>
-                    <div class="skin-actions">
-                        <button class="btn btn-small skin-equip-btn" id="equipSakura" disabled>Locked</button>
-                        <button class="btn btn-small skin-try-btn" id="trySakura">Try</button>
-                    </div>
-                </div>
-
-                <!-- Solar Paddle - UNLOCK BY WAGERING $500 -->
-                <div class="paddle-skin-card" data-skin="solar" id="solarSkinCard">
-                    <canvas class="paddle-preview-canvas" id="solarPreview" width="200" height="100"></canvas>
-                    <div class="skin-name">Solar</div>
-                    <div class="skin-requirement">Wager: $<span id="solarProgress">0</span> / $500</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="solarProgressBar" style="width: 0%"></div>
-                    </div>
-                    <div class="skin-actions">
-                        <button class="btn btn-small skin-equip-btn" id="equipSolar" disabled>Locked</button>
-                        <button class="btn btn-small skin-try-btn" id="trySolar">Try</button>
-                    </div>
-                </div>
-            </div>
+            <button class="btn btn-primary sup-submit" id="submitReportBtn">SUBMIT REPORT →</button>
+            <div class="sup-note">▸ WE REVIEW ALL REPORTS WITHIN 24H · CHEATERS GET BANNED</div>
         </div>
     </div>
 
     <!-- Statistics Screen -->
     <div id="statsScreen" class="screen">
-        <div class="container">
-            <button class="back-btn" id="backFromStats">← Back</button>
-            <h2>Your Statistics</h2>
+        <div class="gam-status-bar">
+            <span>PLAYER / STATISTICS</span>
+            <span style="color:var(--acid);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em;" id="statOnlineChip">▸ LIVE</span>
+        </div>
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromStats">← BACK</button>
+            <span class="rb-screen-title">STATISTICS</span>
+            <span></span>
+        </div>
+        <div class="st-scroll">
 
-            <div class="stats-content">
-                <div class="stat-card">
-                    <div class="stat-icon">🏆</div>
-                    <div class="stat-value" id="statWins">0</div>
-                    <div class="stat-label">Wins</div>
+            <!-- ELO Hero -->
+            <div class="st-elo-card">
+                <div class="st-elo-eyebrow">▸ SKILL RATING</div>
+                <div class="st-elo-num" id="statEloDisplay">1000</div>
+                <div class="st-elo-label">ELO</div>
+            </div>
+
+            <!-- Performance -->
+            <div class="st-section-lbl">▸ PERFORMANCE</div>
+            <div class="st-trio">
+                <div class="st-trio-cell">
+                    <div class="st-trio-val st-val-acid" id="statWins">0</div>
+                    <div class="st-trio-lbl">WINS</div>
                 </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon">💔</div>
-                    <div class="stat-value" id="statLosses">0</div>
-                    <div class="stat-label">Losses</div>
+                <div class="st-trio-cell st-trio-mid">
+                    <div class="st-trio-val st-val-red" id="statLosses">0</div>
+                    <div class="st-trio-lbl">LOSSES</div>
                 </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon">🔥</div>
-                    <div class="stat-value" id="statStreak">0</div>
-                    <div class="stat-label">Best Streak</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon">💰</div>
-                    <div class="stat-value" id="statEarnings">$0.00</div>
-                    <div class="stat-label">Total Earnings</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon">🎲</div>
-                    <div class="stat-value" id="statWagered">$0.00</div>
-                    <div class="stat-label">Total Wagered</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon">📊</div>
-                    <div class="stat-value" id="statWinRate">0%</div>
-                    <div class="stat-label">Win Rate</div>
+                <div class="st-trio-cell">
+                    <div class="st-trio-val" id="statWinRate">0%</div>
+                    <div class="st-trio-lbl">WIN RATE</div>
                 </div>
             </div>
+
+            <!-- Money -->
+            <div class="st-section-lbl">▸ MONEY</div>
+            <div class="st-duo">
+                <div class="st-duo-cell">
+                    <div class="st-duo-lbl">TOTAL EARNED</div>
+                    <div class="st-duo-val st-val-acid" id="statEarnings">$0.00</div>
+                </div>
+                <div class="st-duo-cell st-duo-right">
+                    <div class="st-duo-lbl">TOTAL WAGERED</div>
+                    <div class="st-duo-val" id="statWagered">$0.00</div>
+                </div>
+            </div>
+
+            <!-- Streak -->
+            <div class="st-section-lbl">▸ STREAK</div>
+            <div class="st-streak-row">
+                <div>
+                    <div class="st-streak-eyebrow">BEST WIN STREAK</div>
+                    <div class="st-streak-num" id="statStreak">0</div>
+                </div>
+                <div class="st-streak-tag">CONSECUTIVE<br>WINS</div>
+            </div>
+
+            <div style="height:32px"></div>
         </div>
     </div>
 
     <!-- Leaderboard Screen -->
     <div id="leaderboardScreen" class="screen">
-        <div class="container">
-            <button class="back-btn" id="backFromLeaderboard">← Back</button>
-            <h2>Global Leaderboard</h2>
-
-            <div class="leaderboard-content">
-                <div class="leaderboard-tabs">
-                    <button class="tab-btn active" data-tab="earnings">Top Earnings</button>
-                    <button class="tab-btn" data-tab="wins">Most Wins</button>
-                    <button class="tab-btn" data-tab="elo">ELO Rating</button>
-                </div>
-
-                <div id="leaderboardList" class="leaderboard-list">
-                    <!-- Populated by JavaScript -->
-                    <div class="no-data">No leaderboard data yet</div>
-                </div>
-            </div>
+        <div class="gam-status-bar">
+            <span>ARENA / LEADERBOARD</span>
+            <span style="color:var(--gold);font-family:var(--mono-f);font-size:9.5px;font-weight:700;letter-spacing:0.1em;">▸ GLOBAL</span>
+        </div>
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromLeaderboard">← BACK</button>
+            <span class="rb-screen-title">LEADERBOARD</span>
+            <span></span>
+        </div>
+        <!-- Tab strip -->
+        <div class="lb-tabs">
+            <button class="lb-tab active" data-tab="earnings">EARNINGS</button>
+            <button class="lb-tab" data-tab="wins">WINS</button>
+            <button class="lb-tab" data-tab="elo">ELO</button>
+        </div>
+        <div id="leaderboardList" class="lb-list">
+            <div class="lb-empty">▸ LOADING...</div>
         </div>
     </div>
 
@@ -1294,12 +1209,17 @@
 
     <!-- Match History Screen -->
     <div id="matchHistoryScreen" class="screen">
-        <div class="container">
-            <button class="back-btn" id="backFromMatchHistory">← Back</button>
-            <h2>Match History</h2>
-            <div id="matchHistoryList" class="mh-list">
-                <div class="no-data">No matches played yet</div>
-            </div>
+        <div class="gam-status-bar">
+            <span>PLAYER / MATCH HISTORY</span>
+            <span style="color:var(--mute);font-family:var(--mono-f);font-size:9.5px;letter-spacing:0.1em;">LAST 20</span>
+        </div>
+        <div class="rb-backbar">
+            <button class="rb-back-btn" id="backFromMatchHistory">← BACK</button>
+            <span class="rb-screen-title">MATCH HISTORY</span>
+            <span></span>
+        </div>
+        <div id="matchHistoryList" class="mh-list mh-list--full">
+            <div class="mh-loading">▸ LOADING MATCHES...</div>
         </div>
     </div>
 
@@ -1309,7 +1229,6 @@
     <!-- Scripts -->
     <script src="app.js"></script>
     <script src="ui.js"></script>
-    <script src="wallet.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
