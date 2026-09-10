@@ -5,6 +5,8 @@ services:
     name: goagainstme
     runtime: node
     plan: free                      # free tier: sleeps after ~15 min idle, wakes on request
+    region: frankfurt               # EU Central — ~85ms RTT from Israel vs ~250ms from Oregon (default).
+                                    # NOTE: region is immutable after creation; changing it requires a NEW service.
     buildCommand: npm install --legacy-peer-deps   # @ton/ton vs @ton/core peer-dep conflict
     startCommand: node server.js
     healthCheckPath: /healthz
