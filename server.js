@@ -23,11 +23,68 @@ if (fs.existsSync(_envPath)) {
     });
 }
 
-const db = createSupabase(
-    process.env.SUPABASE_URL || 'https://qfzbhjnksngtlihuovcm.supabase.co',
-    process.env.SUPABASE_SERVICE_KEY || 'sb_publishable_wXqf6IXKxjlMknuLEFKT8w_r2KfM8tr',
-    { realtime: { webSocketImpl: require('ws') } }
-);
+// ── Supabase config ───────────────────────────────────────────────
+// Deliberately NO hardcoded fallback. The previous default pointed at project
+// `qfzbhjnksngtlihuovcm`, which no longer exists — authoritative NXDOMAIN from
+// supabase.co's own nameservers, confirmed 2026-09-10. A dead default is worse
+// than no default: it turns "you forgot to configure me" into a runtime failure
+// that only surfaces when the first match ends.
+//
+// SUPABASE_SERVICE_KEY should be a *service role* key. The old fallback was an
+// `sb_publishable_` (anon) key, which is subject to RLS — server-side upserts to
+// game_stats would be silently rejected unless a permissive policy existed.
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
+const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+const DB_ENABLED   = Boolean(SUPABASE_URL && SUPABASE_KEY);
+
+// Stand-in used when Supabase is unconfigured, so the ~9 `db.from(...)` call
+// sites keep working and the game still runs (stats just don't persist).
+// Mirrors the query-builder chain those call sites use, and is itself thenable
+// so both `await db.from(t).select()...` and `db.from(t).upsert(...).then(cb)`
+// resolve to a normal { data, error } result instead of throwing.
+function makeOfflineDb(reason) {
+    const result = { data: null, error: { message: reason } };
+    const chain = {
+        select: () => chain, eq: () => chain, gt: () => chain,
+        limit:  () => chain, single: () => chain,
+        upsert: () => chain, insert: () => chain,
+        then: (res, rej) => Promise.resolve(result).then(res, rej)
+    };
+    return { from: () => chain };
+}
+
+const db = DB_ENABLED
+    ? createSupabase(SUPABASE_URL, SUPABASE_KEY, { realtime: { webSocketImpl: require('ws') } })
+    : makeOfflineDb('Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_KEY unset)');
+
+let DB_HEALTHY = false;
+
+// Boot-time reachability probe. Never throws and never exits — a dead database
+// must not take the game down — but it makes the state obvious in the logs at
+// startup instead of at the end of the first match.
+async function verifyDatabase() {
+    if (!DB_ENABLED) {
+        console.warn('\n' + '='.repeat(72));
+        console.warn('[DB] NOT CONFIGURED — stats, balances and leaderboards will NOT persist.');
+        console.warn('[DB] Set SUPABASE_URL and SUPABASE_SERVICE_KEY to enable persistence.');
+        console.warn('[DB] The game is fully playable; every match result is discarded.');
+        console.warn('='.repeat(72) + '\n');
+        return false;
+    }
+    try {
+        const { error } = await db.from('game_stats').select('user_id').limit(1);
+        if (error) throw new Error(error.message);
+        DB_HEALTHY = true;
+        console.log(`[DB] Connected: ${SUPABASE_URL}`);
+    } catch (e) {
+        console.error('\n' + '='.repeat(72));
+        console.error(`[DB] UNREACHABLE at ${SUPABASE_URL}`);
+        console.error(`[DB] ${e.message}`);
+        console.error('[DB] Stats, balances and leaderboards will NOT persist this run.');
+        console.error('='.repeat(72) + '\n');
+    }
+    return DB_HEALTHY;
+}
 
 // Load a user's persisted stats from Supabase
 async function loadUserStats(userId) {
@@ -35,7 +92,10 @@ async function loadUserStats(userId) {
         const { data } = await db.from('game_stats')
             .select('*').eq('user_id', String(userId)).single();
         return data;
-    } catch { return null; }
+    } catch (e) {
+        console.error(`[DB] loadUserStats(${userId}) failed:`, e.message);
+        return null;
+    }
 }
 
 // Persist user stats after a match (fire-and-forget)
@@ -120,7 +180,10 @@ async function loadPlatformFees() {
         const { data } = await db.from('platform_fees').select('accumulated').eq('id', 1).single();
         if (data) { _platformFeesAccumulated = parseFloat(data.accumulated) || 0; }
         console.log(`[FEES] Loaded accumulated: $${_platformFeesAccumulated.toFixed(4)}`);
-    } catch { /* first boot */ }
+    } catch (e) {
+        // Also the normal first-boot path (no row yet) — log at debug volume, not as an error.
+        console.log('[FEES] Could not load accumulated fees (first boot, or DB down):', e.message);
+    }
 }
 
 // ── TON Payment Config ────────────────────────────────────────────────────────
@@ -2650,6 +2713,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ WebSocket server ready on port ${PORT}`);
     console.log(`✅ Listening on all interfaces (0.0.0.0)`);
     console.log(`✅ Anti-cheat system active`);
-    loadPlatformFees();
+    verifyDatabase().then(() => loadPlatformFees());
     initTONWallet().then(() => startTONPoller());
 });
